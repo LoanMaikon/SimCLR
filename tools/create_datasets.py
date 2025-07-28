@@ -1,7 +1,7 @@
 import sys
 import os
 import kagglehub
-from torchvision.datasets import OxfordIIITPet, Flowers102, FGVCAircraft
+from torchvision.datasets import OxfordIIITPet, Flowers102, FGVCAircraft, DTD
 def main():
     if len(sys.argv) != 2:
         print("Usage: python create_datasets.py <output_path>")
@@ -42,6 +42,10 @@ def main():
     # FGVCAircraft
     os.makedirs(output_path + "fgvc-aircraft", exist_ok=True)
     _ = FGVCAircraft(root=output_path + "fgvc-aircraft", download=True)
+
+    # DTD
+    os.makedirs(output_path + "dtd", exist_ok=True)
+    _ = DTD(root=output_path + "dtd", download=True)
 
 if __name__ == "__main__":
     main()
