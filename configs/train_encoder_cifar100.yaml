@@ -1,0 +1,9 @@
+output_path: /home/luan/Desktop/simclr_output/train_encoder_cifar100
+datasets_path: /home/luan/Desktop/datasets
+train_datasets: [cifar100]
+batch_size: 32
+num_epochs: 100
+num_workers: 8
+model: resnet50
+transform_resize: [128, 128]
+val_percent: 0.1

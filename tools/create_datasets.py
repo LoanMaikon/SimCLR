@@ -2,6 +2,7 @@ import sys
 import os
 import kagglehub
 from torchvision.datasets import OxfordIIITPet, Flowers102, FGVCAircraft, DTD
+
 def main():
     if len(sys.argv) != 2:
         print("Usage: python create_datasets.py <output_path>")
