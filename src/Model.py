@@ -3,12 +3,17 @@ import torch
 import yaml
 import torch.nn as nn
 import torch.optim as optim
+import shutil
 import random
 import matplotlib.pyplot as plt
 from sklearn.metrics import roc_curve
 import numpy as np
 import os
 from time import strftime, localtime
+import json
+
+from .resnet50 import resnet50
+from .train_encoder_dataset import train_encoder_dataset
 
 class Model():
     def __init__(self, config_path, gpu_index, operation):
@@ -17,41 +22,171 @@ class Model():
 
         match operation:
             case "train_encoder":
+                self._create_train_encoder_output_path(config_path)
                 self._load_train_encoder_config(config_path)
-                self._save_train_encoder_config() # Save on JSON
 
                 self._load_backbone()
-                self._fit_projection_head() # Make _remove_projection_head() too
+                self._fit_projection_head()
 
-                self._compute_normalization()
+                self._compute_normalization() # Calculating mean and std
                 self._save_normalization() # Save on JSON
 
-                self._load_transform()
-                self._load_dataloader()
-        
+                self._load_train_encoder_transform()
+                self._load_train_encoder_dataloaders()
+
+                self._load_train_encoder_optimizer()
+                self._load_train_encoder_scheduler()
+
        # ...
 
-    def _load_transform(self):
+    def get_criterion(self):
         pass
+    
+    def get_optimizer(self):
+        pass
+    
+    def _load_train_encoder_scheduler(self):
+        pass
+
+    '''
+    The SimCLR defines lr = 0.3 * batch_size / 256
+    '''
+    def _load_train_encoder_optimizer(self):
+        pass
+
+    def save_model(self):
+        pass
+
+    def get_train_dataloader(self):
+        return self.train_dataloader
+    
+    def get_val_dataloader(self):
+        return self.val_dataloader
+
+    def model_infer(self, x1, x2=None):
+        if x2 is not None:
+            return self.model(x1, x2)
+        else:
+            return self.model(x1)
+
+    def get_train_encoder_num_epochs(self):
+        return self.train_encoder_num_epochs
+
+    def model_to_train(self):
+        self.model.train()
+
+    def model_to_eval(self):
+        self.model.eval()
+
+    def _load_train_encoder_dataloaders(self):
+        train_dataset = train_encoder_dataset(
+            operation="train",
+            apply_data_augmentation=True,
+            datasets=self.train_encoder_train_datasets,
+            datasets_folder_path=self.train_encoder_datasets_path,
+            val_percent=self.train_encoder_val_percent,
+            transform=self.transform
+        )
+
+        self.train_dataloader = torch.utils.data.DataLoader(
+            dataset=train_dataset,
+            batch_size=self.train_encoder_batch_size,
+            num_workers=self.train_encoder_num_workers,
+            shuffle=True,
+            # pin_memory=True,
+            # pin_memory_device=self.device
+        )
+
+        val_dataset = train_encoder_dataset(
+            operation="val",
+            apply_data_augmentation=True,
+            datasets=self.train_encoder_train_datasets,
+            datasets_folder_path=self.train_encoder_datasets_path,
+            val_percent=self.train_encoder_val_percent,
+            transform=self.transform
+        )
+
+        self.val_dataloader = torch.utils.data.DataLoader(
+            dataset=val_dataset,
+            batch_size=self.train_encoder_batch_size,
+            num_workers=self.train_encoder_num_workers,
+            shuffle=False,
+            # pin_memory=True,
+            # pin_memory_device=self.device
+        )
+
+    def _load_train_encoder_transform(self):
+        # Pseudo code of Apendix A from SimCLR paper
+        def __get_color_distortion(strength=1.0):
+            collor_jitter = v2.ColorJitter(0.8 * strength, 0.8 * strength, 0.8 * strength, 0.2 * strength)
+            rnd_color_jitter = v2.RandomApply([collor_jitter], p=0.8)
+            rnd_gray = v2.RandomGrayscale(p=0.2)
+
+            return v2.Compose([rnd_color_jitter, rnd_gray])
+
+        self.transform = v2.Compose([
+            v2.RandomResizedCrop(self.train_encoder_transform_resize), # SimCLR uses default scale and ratio
+            v2.RandomHorizontalFlip(0.5), # SimCLR uses 50% probability
+            __get_color_distortion(),
+            v2.GaussianBlur(kernel_size=23), # SimCLR uses kernel size of 10% of image size and default sigma. We will use 23
+            v2.ToImage(),
+            v2.ToDtype(torch.float32, scale=True),
+            v2.Normalize(mean=self.mean, std=self.std)
+        ])
 
     def _save_normalization(self):
-        pass
+        with open(os.path.join(self.train_encoder_output_path, "normalization.json"), "w") as f:
+            json.dump({"mean": self.mean, "std": self.std}, f)
 
     def _compute_normalization(self):
-        pass
+        num_channels = 3
 
-    def _load_dataloader(self):
-        pass
+        transform = v2.Compose([
+            v2.Resize(self.train_encoder_transform_resize),
+            v2.ToImage(),
+            v2.ToDtype(torch.float32, scale=True)
+        ])
+
+        dataset = train_encoder_dataset(
+            operation="all",
+            apply_data_augmentation=False,
+            datasets=self.train_encoder_train_datasets,
+            datasets_folder_path=self.train_encoder_datasets_path,
+            val_percent=self.train_encoder_val_percent,
+            transform=transform
+        )
+
+        dataloader = torch.utils.data.DataLoader(
+            dataset,
+            batch_size=self.train_encoder_batch_size,
+            num_workers=self.train_encoder_num_workers,
+            # pin_memory=True,
+            # pin_memory_device=self.device
+        )
+
+        mean = torch.zeros(num_channels, device=self.device)
+        std = torch.zeros(num_channels, device=self.device)
+        total_samples = 0
+        for images in dataloader:
+            images = images.to(self.device)
+            batch_samples = images.size(0)
+            total_samples += batch_samples
+            for i in range(num_channels):
+                mean[i] += images[:, i, :, :].mean().item() * batch_samples
+                std[i] += images[:, i, :, :].std().item() * batch_samples
+
+        self.mean = [m.cpu().item() / total_samples for m in mean]
+        self.std = [s.cpu().item() / total_samples for s in std]
 
     def _load_backbone(self):
         self.model = None
 
-        match self.model_name:
+        match self.train_encoder_model_name:
             case 'resnet18':
                 pass
 
             case 'resnet50':
-                pass
+                self.model = resnet50(self.train_encoder_projection_head_mode)
             
             case 'mobilenet_v3_large':
                 pass
@@ -59,16 +194,17 @@ class Model():
             case 'mobilevit':
                 pass
         
-        assert self.model is not None, f"Model {self.model_name} doesn't exist."
+        assert self.model is not None, f"Model {self.train_encoder_model_name} doesn't exist."
+
+        self.model.to(self.device)
     
     def _fit_projection_head(self):
-        pass
+        self.model.fit_projection_head()
     
-    def _save_train_encoder_config(self):
-        # Save the config so when testing, we can load it
-        pass
+    def _remove_projection_head(self):
+        self.model.remove_projection_head()
 
-    def _load_train_encoder_config(self, config_path):
+    def _create_train_encoder_output_path(self, config_path):
         config = yaml.safe_load(open(config_path, 'r'))
 
         if not os.path.exists(config['output_path']):
@@ -78,28 +214,32 @@ class Model():
             if f"execution_{i}" not in executions:
                 config['output_path'] += f"/execution_{i}"
                 break
-
         config['output_path'] += f'/{self.operation}' if not config['output_path'].endswith('/') else f'{self.operation}'
+        self.train_encoder_output_path = str(config['output_path'])
+
+        os.makedirs(self.train_encoder_output_path, exist_ok=True)
+        shutil.copyfile(config_path, os.path.join(self.train_encoder_output_path, "config.yaml"))
+
+    def _load_train_encoder_config(self, config_path):
+        config = yaml.safe_load(open(config_path, 'r'))
+
         config['datasets_path'] += '/' if not config['datasets_path'].endswith('/') else ''
 
-        os.makedirs(config['output_path'], exist_ok=True)
-
         # Configs to class attributes
-        self.output_path = str(config['output_path'])
-        self.datasets_path = str(config['datasets_path'])
-        self.batch_size = int(config['batch_size'])
-        self.num_epochs = int(config['num_epochs'])
-        self.num_workers = int(config['num_workers'])
-        self.model_name = str(config['model'])
-        self.transform_resize = tuple(config['transform_resize'])
-        self.train_datasets = list(config['train_datasets'])
-        self.val_percent = float(config['val_percent'])
-
-        return config
+        self.train_encoder_datasets_path = str(config['datasets_path'])
+        self.train_encoder_batch_size = int(config['batch_size'])
+        self.train_encoder_num_epochs = int(config['num_epochs'])
+        self.train_encoder_num_workers = int(config['num_workers'])
+        self.train_encoder_model_name = str(config['model'])
+        self.train_encoder_transform_resize = tuple(config['transform_resize'])
+        self.train_encoder_train_datasets = list(config['train_datasets'])
+        self.train_encoder_val_percent = float(config['val_percent'])
+        self.train_encoder_projection_head_mode = str(config['projection_head_mode'])
+        self.train_encoder_temperature = float(config['temperature'])
 
     def write_on_log(self, text):
         time = strftime("%Y-%m-%d %H:%M:%S - ", localtime())
-        mode = "w" if not os.path.exists(os.path.join(self.output_path, "log.txt")) else "a"
+        mode = "w" if not os.path.exists(os.path.join(self.train_encoder_output_path, "log.txt")) else "a"
 
-        with open(os.path.join(self.output_path, "log.txt"), mode) as file:
+        with open(os.path.join(self.train_encoder_output_path, "log.txt"), mode) as file:
             file.write(time + text + "\n")

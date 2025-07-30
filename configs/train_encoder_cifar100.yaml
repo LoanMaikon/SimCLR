@@ -5,5 +5,7 @@ batch_size: 32
 num_epochs: 100
 num_workers: 8
 model: resnet50
-transform_resize: [128, 128]
+transform_resize: [224, 224]
 val_percent: 0.1
+projection_head_mode: non-linear # linear, non-linear or none
+temperature: 0.5

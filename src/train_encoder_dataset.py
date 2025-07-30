@@ -8,8 +8,15 @@ import torchvision.transforms as v2
 import scipy.io
 
 class train_encoder_dataset(Dataset):
-    def __init__(self, operation, datasets, datasets_folder_path, transform, val_percent):
-        images = []
+    def __init__(self, operation, apply_data_augmentation, datasets, datasets_folder_path, transform, val_percent):
+        if operation not in ["train", "val", "all"]:
+            raise ValueError("Operation must be 'train', 'val', or 'all'.")
+        
+        self.operation = operation
+        self.apply_data_augmentation = apply_data_augmentation
+        self.transform = transform
+
+        self.images = []
 
         for dataset in datasets:
             dataset_path = f"{datasets_folder_path}{dataset}/"
@@ -26,13 +33,16 @@ class train_encoder_dataset(Dataset):
                         images_per_class[_class] = sorted(images_per_class[_class])
 
                         n_val_images = ceil(len(images_per_class[_class]) * val_percent)
+                        
+                        match self.operation:
+                            case "train":
+                                images_per_class[_class] = images_per_class[_class][:-n_val_images]
+                            case "val":
+                                images_per_class[_class] = images_per_class[_class][-n_val_images:]
+                            case "all":
+                                pass
 
-                        if operation == "train":
-                            images_per_class[_class] = images_per_class[_class][:-n_val_images]
-                        elif operation == "val":
-                            images_per_class[_class] = images_per_class[_class][-n_val_images:]
-
-                        images.extend(images_per_class[_class])
+                        self.images.extend(images_per_class[_class])
 
                 case 'dtd':
                     classes = os.listdir(dataset_path + "dtd/dtd/images/")
@@ -44,13 +54,16 @@ class train_encoder_dataset(Dataset):
                         images_per_class[_class] = sorted(images_per_class[_class])
 
                         n_val_images = ceil(len(images_per_class[_class]) * val_percent)
+                        
+                        match self.operation:
+                            case "train":
+                                images_per_class[_class] = images_per_class[_class][:-n_val_images]
+                            case "val":
+                                images_per_class[_class] = images_per_class[_class][-n_val_images:]
+                            case "all":
+                                pass
 
-                        if operation == "train":
-                            images_per_class[_class] = images_per_class[_class][:-n_val_images]
-                        elif operation == "val":
-                            images_per_class[_class] = images_per_class[_class][-n_val_images:]
-
-                        images.extend(images_per_class[_class])
+                        self.images.extend(images_per_class[_class])
 
                 case 'fgvc-aircraft':
                     _images = glob(dataset_path + "fgvc-aircraft-2013b/data/images/*.jpg")
@@ -88,12 +101,15 @@ class train_encoder_dataset(Dataset):
 
                         n_val_images = ceil(len(images_per_class[_class]) * val_percent)
 
-                        if operation == "train":
-                            images_per_class[_class] = images_per_class[_class][:-n_val_images]
-                        elif operation == "val":
-                            images_per_class[_class] = images_per_class[_class][-n_val_images:]
+                        match self.operation:
+                            case "train":
+                                images_per_class[_class] = images_per_class[_class][:-n_val_images]
+                            case "val":
+                                images_per_class[_class] = images_per_class[_class][-n_val_images:]
+                            case "all":
+                                pass
 
-                        images.extend(images_per_class[_class])
+                        self.images.extend(images_per_class[_class])
 
                 case 'flowers-102':
                     image_labels_file = f"{dataset_path}flowers-102/imagelabels.mat"
@@ -115,12 +131,15 @@ class train_encoder_dataset(Dataset):
 
                         n_val_images = ceil(len(images_per_class[_class]) * val_percent)
 
-                        if operation == "train":
-                            images_per_class[_class] = images_per_class[_class][:-n_val_images]
-                        elif operation == "val":
-                            images_per_class[_class] = images_per_class[_class][-n_val_images:]
+                        match self.operation:
+                            case "train":
+                                images_per_class[_class] = images_per_class[_class][:-n_val_images]
+                            case "val":
+                                images_per_class[_class] = images_per_class[_class][-n_val_images:]
+                            case "all":
+                                pass
 
-                        images.extend(images_per_class[_class])
+                        self.images.extend(images_per_class[_class])
 
                 case 'food-101':
                     classes = os.listdir(dataset_path + "food-101/food-101/images/")
@@ -131,12 +150,15 @@ class train_encoder_dataset(Dataset):
 
                         n_val_images = ceil(len(images_per_class[_class]) * val_percent)
 
-                        if operation == "train":
-                            images_per_class[_class] = images_per_class[_class][:-n_val_images]
-                        elif operation == "val":
-                            images_per_class[_class] = images_per_class[_class][-n_val_images:]
+                        match self.operation:
+                            case "train":
+                                images_per_class[_class] = images_per_class[_class][:-n_val_images]
+                            case "val":
+                                images_per_class[_class] = images_per_class[_class][-n_val_images:]
+                            case "all":
+                                pass
 
-                        images.extend(images_per_class[_class])
+                        self.images.extend(images_per_class[_class])
 
                 case 'oxford-pets':
                     _images = glob(dataset_path + "oxford-iiit-pet/images/*.jpg")
@@ -156,12 +178,15 @@ class train_encoder_dataset(Dataset):
 
                         n_val_images = ceil(len(images_per_class[_class]) * val_percent)
 
-                        if operation == "train":
-                            images_per_class[_class] = images_per_class[_class][:-n_val_images]
-                        elif operation == "val":
-                            images_per_class[_class] = images_per_class[_class][-n_val_images:]
+                        match self.operation:
+                            case "train":
+                                images_per_class[_class] = images_per_class[_class][:-n_val_images]
+                            case "val":
+                                images_per_class[_class] = images_per_class[_class][-n_val_images:]
+                            case "all":
+                                pass
 
-                        images.extend(images_per_class[_class])
+                        self.images.extend(images_per_class[_class])
 
                 case 'stanford-cars':
                     train_annos = f"{dataset_path}/car_devkit/devkit/cars_train_annos.mat"
@@ -213,12 +238,15 @@ class train_encoder_dataset(Dataset):
 
                         n_val_images = ceil(len(images_per_class[_class]) * val_percent)
 
-                        if operation == "train":
-                            images_per_class[_class] = images_per_class[_class][:-n_val_images]
-                        elif operation == "val":
-                            images_per_class[_class] = images_per_class[_class][-n_val_images:]
+                        match self.operation:
+                            case "train":
+                                images_per_class[_class] = images_per_class[_class][:-n_val_images]
+                            case "val":
+                                images_per_class[_class] = images_per_class[_class][-n_val_images:]
+                            case "all":
+                                pass
 
-                        images.extend(images_per_class[_class])
+                        self.images.extend(images_per_class[_class])
     
     def __len__(self):
         return len(self.images)
@@ -227,8 +255,13 @@ class train_encoder_dataset(Dataset):
         image_path = self.images[idx]
 
         image = read_image(image_path, ImageReadMode.RGB)
-        
-        x1 = self.transform(image)
-        x2 = self.transform(image)
 
-        return x1, x2
+        if self.apply_data_augmentation:
+            x1 = self.transform(image)
+            x2 = self.transform(image)
+
+            return x1, x2
+        
+        else:
+            image = self.transform(image)
+            return image
