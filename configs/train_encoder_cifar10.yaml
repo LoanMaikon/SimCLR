@@ -1,10 +1,12 @@
-output_path: /home/luan/Desktop/simclr_output/train_encoder_cifar100
-datasets_path: /home/luan/Desktop/datasets
+output_path: /home/lmk22/simclr_output/train_encoder_cifar100
+datasets_path: /home/lmk22/datasets
 train_datasets: [cifar10]
-batch_size: 32
-num_epochs: 100
-num_workers: 8
+batch_size: 256 # The paper uses 4096 as the optimal
+num_epochs: 100 # The paper uses 100 epochs
+num_workers: 32
 model: resnet50
 transform_resize: [224, 224]
 projection_head_mode: non-linear # linear, non-linear or none
-temperature: 0.5
+temperature: 0.5 # The paper tells us that the optimal and stable temperature is 0.5
+projection_dim: 128 # The paper defines the latent space of size 128
+warmup_epochs: 10 # The paper uses 10 epochs to warm up the learning rate

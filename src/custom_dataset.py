@@ -261,6 +261,21 @@ class custom_dataset(Dataset):
                     #             pass
 
                     #     self.images.extend(images_per_class[_class])
+                
+                case 'stl10':
+                    pass
+
+                case 'birdsnap':
+                    pass
+
+                case 'caltech101':
+                    pass
+
+                case 'caltech256':
+                    pass
+                    
+                case 'imagenet':
+                    pass
     
     def __len__(self):
         return len(self.images)

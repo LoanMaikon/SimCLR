@@ -33,14 +33,15 @@ def train(model):
         
         epoch_train_loss = 0.0
         for batch in model.get_train_dataloader():
+            model.get_optimizer().zero_grad()
+
             z1, z2 = model.model_infer(batch[0], batch[1])
 
-            loss = model.get_criterion(z1, z2)
+            loss = model.apply_criterion(z1, z2)
             loss.backward()
             epoch_train_loss += loss.item()
 
             model.get_optimizer().step()
-            model.get_optimizer().zero_grad()
 
         epoch_train_loss /= len(model.get_train_dataloader())
         model.write_on_log(f"Training loss: {epoch_train_loss:.4f}")
@@ -52,7 +53,7 @@ def train(model):
             for batch in model.get_val_dataloader():
                 z1, z2 = model.model_infer(batch[0], batch[1])
 
-                loss = model.get_criterion(z1, z2)
+                loss = model.apply_criterion(z1, z2)
                 epoch_val_loss += loss.item()
         epoch_val_loss /= len(model.get_val_dataloader())
         model.write_on_log(f"Validation loss: {epoch_val_loss:.4f}")
@@ -61,6 +62,8 @@ def train(model):
             model.write_on_log(f"Validation loss improved from {best_val_loss:.4f} to {epoch_val_loss:.4f}. Saving model...")
             best_val_loss = epoch_val_loss
             model.save_model()
+        
+        model.get_scheduler().step()
 
         model.write_on_log(f"")
 

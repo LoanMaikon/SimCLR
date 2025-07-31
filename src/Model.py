@@ -14,6 +14,7 @@ import json
 
 from .resnet50 import resnet50
 from .custom_dataset import custom_dataset
+from .nt_xent import nt_xent
 
 class Model():
     def __init__(self, config_path, gpu_index, operation):
@@ -34,28 +35,51 @@ class Model():
                 self._load_train_encoder_transform()
                 self._load_train_encoder_dataloaders()
 
+                self._load_train_encoder_criterion()
+
                 self._load_train_encoder_optimizer()
                 self._load_train_encoder_scheduler()
 
        # ...
 
     def get_criterion(self):
-        pass
+        return self.criterion
+    
+    def apply_criterion(self, z1, z2):
+        return self.criterion(z1, z2)
+
+    def get_scheduler(self):
+        return self.scheduler
     
     def get_optimizer(self):
-        pass
+        return self.optimizer
     
+    def _load_train_encoder_criterion(self):
+        self.criterion = nt_xent(self.train_encoder_temperature)
+
     def _load_train_encoder_scheduler(self):
-        pass
+        def __lr_lambda(current_epoch):
+            if current_epoch < self.train_encoder_warmup_epochs:
+                return float(current_epoch) / float(max(1, self.train_encoder_warmup_epochs))
+            
+            progress = (current_epoch - self.train_encoder_warmup_epochs) / (self.train_encoder_num_epochs - self.train_encoder_warmup_epochs)
+            return 0.5 * (1. + np.cos(np.pi * progress)) # Cosine decay formula
+
+        self.scheduler = torch.optim.lr_scheduler.LambdaLR(self.optimizer, lr_lambda=__lr_lambda)
 
     '''
     The SimCLR defines lr = 0.3 * batch_size / 256
     '''
     def _load_train_encoder_optimizer(self):
-        pass
+        base_optimizer = optim.Adam(self.model.parameters(), lr=0.3 * self.train_encoder_batch_size / 256, weight_decay=1e-6)
+        self.optimizer = base_optimizer
+
+        # Still have to make LARS
 
     def save_model(self):
-        pass
+        os.makedirs(self.train_encoder_output_path + "/models", exist_ok=True)
+
+        torch.save(self.model.state_dict(), os.path.join(self.train_encoder_output_path, "models", "model.pth"))
 
     def get_train_dataloader(self):
         return self.train_dataloader
@@ -64,7 +88,11 @@ class Model():
         return self.val_dataloader
 
     def model_infer(self, x1, x2=None):
+        x1 = x1.to(self.device)
+
         if x2 is not None:
+            x2 = x2.to(self.device)
+
             return self.model(x1, x2)
         return self.model(x1)
 
@@ -91,8 +119,7 @@ class Model():
             batch_size=self.train_encoder_batch_size,
             num_workers=self.train_encoder_num_workers,
             shuffle=True,
-            # pin_memory=True,
-            # pin_memory_device=self.device
+            pin_memory=True,
         )
 
         val_dataset = custom_dataset(
@@ -108,8 +135,7 @@ class Model():
             batch_size=self.train_encoder_batch_size,
             num_workers=self.train_encoder_num_workers,
             shuffle=False,
-            # pin_memory=True,
-            # pin_memory_device=self.device
+            pin_memory=True,
         )
 
     def _load_train_encoder_transform(self):
@@ -156,8 +182,7 @@ class Model():
             dataset,
             batch_size=self.train_encoder_batch_size,
             num_workers=self.train_encoder_num_workers,
-            # pin_memory=True,
-            # pin_memory_device=self.device
+            pin_memory=True,
         )
 
         mean = torch.zeros(num_channels, device=self.device)
@@ -182,7 +207,7 @@ class Model():
                 pass
 
             case 'resnet50':
-                self.model = resnet50(self.train_encoder_projection_head_mode)
+                self.model = resnet50(self.train_encoder_projection_head_mode, self.train_encoder_projection_dim)
             
             case 'mobilenet_v3_large':
                 pass
@@ -219,6 +244,7 @@ class Model():
     def _load_train_encoder_config(self, config_path):
         config = yaml.safe_load(open(config_path, 'r'))
 
+        config['output_path'] += '/' if not config['output_path'].endswith('/') else ''
         config['datasets_path'] += '/' if not config['datasets_path'].endswith('/') else ''
 
         # Configs to class attributes
@@ -231,6 +257,8 @@ class Model():
         self.train_encoder_train_datasets = list(config['train_datasets'])
         self.train_encoder_projection_head_mode = str(config['projection_head_mode'])
         self.train_encoder_temperature = float(config['temperature'])
+        self.train_encoder_projection_dim = int(config['projection_dim'])
+        self.train_encoder_warmup_epochs = int(config['warmup_epochs'])
 
     def write_on_log(self, text):
         time = strftime("%Y-%m-%d %H:%M:%S - ", localtime())

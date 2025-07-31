@@ -14,29 +14,34 @@ from time import strftime, localtime
 import json
 
 class resnet50(nn.Module):
-    def __init__(self, projection_head_mode):
+    def __init__(self, projection_head_mode, projection_dim):
         super(resnet50, self).__init__()
         self.projection_head_mode = projection_head_mode
+        self.projection_dim = projection_dim
         self.backbone = models.resnet50(weights=None) # Training from scratch
         self.projection_head = None
 
         self._load_projection_head()
-    
+
     '''
-    The paper defines the latent space of size 128
+    Following https://github.com/google-research/simclr/blob/master/model_util.py
     '''
     def _load_projection_head(self):
         match self.projection_head_mode:
             case 'linear':
-                self.projection_head = nn.Linear(self.backbone.fc.in_features, self.backbone.fc.in_features)
+                self.projection_head = nn.Sequential(
+                    nn.Linear(self.backbone.fc.in_features, self.projection_dim, bias=False),
+                    nn.BatchNorm1d(self.projection_dim),
+                )
+
 
             case 'non-linear':
                 self.projection_head = nn.Sequential(
                     nn.Linear(self.backbone.fc.in_features, self.backbone.fc.in_features, bias=False),
                     nn.BatchNorm1d(self.backbone.fc.in_features),
                     nn.ReLU(),
-                    nn.Linear(self.backbone.fc.in_features, 128, bias=False),
-                    nn.BatchNorm1d(128),
+                    nn.Linear(self.backbone.fc.in_features, self.projection_dim, bias=False),
+                    nn.BatchNorm1d(self.projection_dim),
                 )
             
             case 'none':
