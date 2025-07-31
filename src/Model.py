@@ -13,7 +13,7 @@ from time import strftime, localtime
 import json
 
 from .resnet50 import resnet50
-from .train_encoder_dataset import train_encoder_dataset
+from .custom_dataset import custom_dataset
 
 class Model():
     def __init__(self, config_path, gpu_index, operation):
@@ -66,8 +66,7 @@ class Model():
     def model_infer(self, x1, x2=None):
         if x2 is not None:
             return self.model(x1, x2)
-        else:
-            return self.model(x1)
+        return self.model(x1)
 
     def get_train_encoder_num_epochs(self):
         return self.train_encoder_num_epochs
@@ -79,12 +78,11 @@ class Model():
         self.model.eval()
 
     def _load_train_encoder_dataloaders(self):
-        train_dataset = train_encoder_dataset(
+        train_dataset = custom_dataset(
             operation="train",
             apply_data_augmentation=True,
             datasets=self.train_encoder_train_datasets,
             datasets_folder_path=self.train_encoder_datasets_path,
-            val_percent=self.train_encoder_val_percent,
             transform=self.transform
         )
 
@@ -97,12 +95,11 @@ class Model():
             # pin_memory_device=self.device
         )
 
-        val_dataset = train_encoder_dataset(
+        val_dataset = custom_dataset(
             operation="val",
             apply_data_augmentation=True,
             datasets=self.train_encoder_train_datasets,
             datasets_folder_path=self.train_encoder_datasets_path,
-            val_percent=self.train_encoder_val_percent,
             transform=self.transform
         )
 
@@ -147,12 +144,11 @@ class Model():
             v2.ToDtype(torch.float32, scale=True)
         ])
 
-        dataset = train_encoder_dataset(
-            operation="all",
+        dataset = custom_dataset(
+            operation="train",
             apply_data_augmentation=False,
             datasets=self.train_encoder_train_datasets,
             datasets_folder_path=self.train_encoder_datasets_path,
-            val_percent=self.train_encoder_val_percent,
             transform=transform
         )
 
@@ -167,7 +163,7 @@ class Model():
         mean = torch.zeros(num_channels, device=self.device)
         std = torch.zeros(num_channels, device=self.device)
         total_samples = 0
-        for images in dataloader:
+        for images, _ in dataloader:
             images = images.to(self.device)
             batch_samples = images.size(0)
             total_samples += batch_samples
@@ -233,7 +229,6 @@ class Model():
         self.train_encoder_model_name = str(config['model'])
         self.train_encoder_transform_resize = tuple(config['transform_resize'])
         self.train_encoder_train_datasets = list(config['train_datasets'])
-        self.train_encoder_val_percent = float(config['val_percent'])
         self.train_encoder_projection_head_mode = str(config['projection_head_mode'])
         self.train_encoder_temperature = float(config['temperature'])
 

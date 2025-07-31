@@ -55,10 +55,10 @@ class resnet50(nn.Module):
         pass
 
     def forward(self, x1, x2=None):
-        x = self.backbone(x1)
+        x1 = self.backbone(x1)
 
         if x2 is not None:
             x2 = self.backbone(x2)
-            return x, x2
+            return x1, x2
 
-        return x
+        return x1
