@@ -129,7 +129,6 @@ class Model():
             num_workers=self.train_encoder_num_workers,
             shuffle=True,
             pin_memory=True,
-            persistent_workers=True,
         )
 
         val_dataset = custom_dataset(
@@ -146,7 +145,6 @@ class Model():
             num_workers=self.train_encoder_num_workers,
             shuffle=False,
             pin_memory=True,
-            persistent_workers=True,
         )
 
     def _load_train_encoder_transform(self):
@@ -194,7 +192,6 @@ class Model():
             batch_size=self.train_encoder_batch_size,
             num_workers=self.train_encoder_num_workers,
             pin_memory=True,
-            persistent_workers=True,
         )
 
         mean = torch.zeros(num_channels, device=self.device)
