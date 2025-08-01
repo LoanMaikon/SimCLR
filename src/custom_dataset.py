@@ -275,7 +275,52 @@ class custom_dataset(Dataset):
                     pass
                     
                 case 'imagenet':
-                    pass
+                    validation_gd_path = f"{dataset_path}ILSVRC2012_devkit_t12/data/ILSVRC2012_validation_ground_truth.txt"
+                    meta_path = f"{dataset_path}ILSVRC2012_devkit_t12/data/meta.mat"
+
+                    data = scipy.io.loadmat(open(meta_path, "rb"))
+                    synsets = data.get('synsets')
+
+                    id_to_wnid = {}
+                    wnid_to_class = {}
+                    for synset in synsets:
+                        if int(synset['num_children'][0][0][0]) == 0:
+                            wnid = synset['WNID'][0][0]
+                            words = synset['words'][0][0]
+
+                            wnid_to_class[wnid] = words
+                            id_to_wnid[int(synset['ILSVRC2012_ID'][0][0][0])] = wnid
+
+                    match self.operation:
+                        case "train":
+                            train_wnid = os.listdir(dataset_path + "train/")
+                            for wnid in train_wnid:
+                                _images = glob(dataset_path + "train/" + wnid + "/*.JPEG")
+                                self.images.extend(_images)
+                                self.labels.extend([wnid_to_class[wnid]] * len(_images))
+                            
+                        case "val":
+                            val_images = sorted(glob(dataset_path + "val/*.JPEG"))
+
+                            idx_to_wnid = {}
+                            with open(validation_gd_path, "r") as file:
+                                for idx, line in enumerate(file):
+                                    line = line.strip()
+                                    if not line:
+                                        continue
+                                    wnid = id_to_wnid[int(line)]
+                                    idx_to_wnid[idx] = wnid
+                            
+                            for idx, image in enumerate(val_images):
+                                wnid = idx_to_wnid[idx]
+
+                                self.images.append(image)
+                                self.labels.append(wnid_to_class[wnid])
+
+                        case "test":
+                            test_images = sorted(glob(dataset_path + "test/*.JPEG"))
+                            self.images.extend(test_images)
+                            self.labels.extend([None] * len(test_images))  # Labels are not available
     
     def __len__(self):
         return len(self.images)

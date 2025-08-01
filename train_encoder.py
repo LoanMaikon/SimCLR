@@ -23,7 +23,11 @@ def main():
 Selecting the epoch with the lowest validation loss
 '''
 def train(model):
-    model.write_on_log("Starting training...")
+    model.write_on_log(f"Starting training. Learning rate: {model.get_learning_rate()}")
+
+    target_batch_size = model.get_target_batch_size()
+    batch_size = model.get_batch_size()
+    accumulation_steps = target_batch_size // batch_size # Number of batches to accumulate gradients before updating weights
 
     best_val_loss = float('inf')
     for epoch in range(model.get_train_encoder_num_epochs()):
@@ -32,16 +36,18 @@ def train(model):
         model.model_to_train()
         
         epoch_train_loss = 0.0
-        for batch in model.get_train_dataloader():
-            model.get_optimizer().zero_grad()
-
+        model.get_optimizer().zero_grad()
+        for i, batch in enumerate(model.get_train_dataloader()):
             z1, z2 = model.model_infer(batch[0], batch[1])
 
-            loss = model.apply_criterion(z1, z2)
+            loss = model.apply_criterion(z1, z2) / accumulation_steps
             loss.backward()
-            epoch_train_loss += loss.item()
+            epoch_train_loss += loss.item() * accumulation_steps
 
-            model.get_optimizer().step()
+            # Update the weights only after accumulating gradients
+            if (i + 1) % accumulation_steps == 0 or (i + 1) == len(model.get_train_dataloader()):
+                model.get_optimizer().step()
+                model.get_optimizer().zero_grad()
 
         epoch_train_loss /= len(model.get_train_dataloader())
         model.write_on_log(f"Training loss: {epoch_train_loss:.4f}")

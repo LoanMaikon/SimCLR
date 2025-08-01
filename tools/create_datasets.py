@@ -48,5 +48,7 @@ def main():
     os.makedirs(output_path + "dtd", exist_ok=True)
     _ = DTD(root=output_path + "dtd", download=True)
 
+    # Get ImageNet 2012 from the ImageNet website and rename it to imagenet
+
 if __name__ == "__main__":
     main()

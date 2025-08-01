@@ -42,6 +42,15 @@ class Model():
 
        # ...
 
+    def get_learning_rate(self):
+        return float(self.get_optimizer().param_groups[0]['lr'])
+
+    def get_batch_size(self):
+        return self.train_encoder_batch_size
+
+    def get_target_batch_size(self):
+        return self.train_encoder_target_batch_size
+
     def get_criterion(self):
         return self.criterion
     
@@ -120,6 +129,7 @@ class Model():
             num_workers=self.train_encoder_num_workers,
             shuffle=True,
             pin_memory=True,
+            persistent_workers=True,
         )
 
         val_dataset = custom_dataset(
@@ -136,6 +146,7 @@ class Model():
             num_workers=self.train_encoder_num_workers,
             shuffle=False,
             pin_memory=True,
+            persistent_workers=True,
         )
 
     def _load_train_encoder_transform(self):
@@ -183,6 +194,7 @@ class Model():
             batch_size=self.train_encoder_batch_size,
             num_workers=self.train_encoder_num_workers,
             pin_memory=True,
+            persistent_workers=True,
         )
 
         mean = torch.zeros(num_channels, device=self.device)
@@ -259,6 +271,7 @@ class Model():
         self.train_encoder_temperature = float(config['temperature'])
         self.train_encoder_projection_dim = int(config['projection_dim'])
         self.train_encoder_warmup_epochs = int(config['warmup_epochs'])
+        self.train_encoder_target_batch_size = int(config['target_batch_size'])
 
     def write_on_log(self, text):
         time = strftime("%Y-%m-%d %H:%M:%S - ", localtime())
