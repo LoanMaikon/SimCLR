@@ -268,7 +268,6 @@ class Model():
         self.train_encoder_temperature = float(config['temperature'])
         self.train_encoder_projection_dim = int(config['projection_dim'])
         self.train_encoder_warmup_epochs = int(config['warmup_epochs'])
-        self.train_encoder_target_batch_size = int(config['target_batch_size'])
 
     def write_on_log(self, text):
         time = strftime("%Y-%m-%d %H:%M:%S - ", localtime())

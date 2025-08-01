@@ -1,7 +1,6 @@
 output_path: /disk0/lmk22/simclr_output/train_encoder_imagenet
 datasets_path: /disk0/lmk22/datasets
 train_datasets: [imagenet]
-target_batch_size: 4096 # The paper uses 4096 as the optimal batch size. This is de batch size to update the weights
 batch_size: 256 # Batch size to process at the same time since we can't use 4096 in one GPU
 num_epochs: 100 # The paper uses 100 epochs
 num_workers: 64
