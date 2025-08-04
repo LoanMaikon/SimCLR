@@ -53,217 +53,329 @@ class custom_dataset(Dataset):
                         self.labels.extend([class_idx] * len(images_per_class[_class]))
 
                 case 'dtd':
-                    pass
-                    # classes = os.listdir(dataset_path + "dtd/dtd/images/")
-                    # images_per_class = {}
-                    # for _class in classes:
-                    #     images_per_class[_class] = []
-                    #     images_per_class[_class].extend(glob(dataset_path + "dtd/dtd/images/" + _class + "/*.jpg"))
+                    labels_path = dataset_path + "dtd/dtd/labels/"
+                    images_path = dataset_path + "dtd/dtd/images/"
+                    train_labels = open(labels_path + "train1.txt", "r")
+                    val_labels = open(labels_path + "val1.txt", "r")
+                    test_labels = open(labels_path + "test1.txt", "r")
 
-                    #     images_per_class[_class] = sorted(images_per_class[_class])
+                    image_to_split = {}
+                    for line in train_labels:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        image_to_split[line] = "train"
+                    
+                    for line in val_labels:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        image_to_split[line] = "val"
+                    
+                    for line in test_labels:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        image_to_split[line] = "test"
 
-                    #     n_val_images = ceil(len(images_per_class[_class]) * val_percent)
-                        
-                    #     match self.operation:
-                    #         case "train":
-                    #             images_per_class[_class] = images_per_class[_class][:-n_val_images]
-                    #         case "val":
-                    #             images_per_class[_class] = images_per_class[_class][-n_val_images:]
-                    #         case "all":
-                    #             pass
+                    classes = sorted(os.listdir(dataset_path + "dtd/dtd/images/"))
+                    class_to_id = {cls: idx for idx, cls in enumerate(classes)}
 
-                    #     self.images.extend(images_per_class[_class])
+                    for _class in classes:
+                        class_id = class_to_id[_class]
+
+                        _images = glob(images_path + _class + "/*.jpg")
+
+                        for image in _images:
+                            image_name = image.split("/")[-2:]
+                            image_name = "/".join(image_name)
+                            
+                            if image_to_split.get(image_name) == self.operation:
+                                self.images.append(image)
+                                self.labels.append(class_id)
 
                 case 'fgvc-aircraft':
-                    pass
-                    # _images = glob(dataset_path + "fgvc-aircraft-2013b/data/images/*.jpg")
-                    # test_classes_file = f"{dataset_path}fgvc-aircraft-2013b/data/images_variant_test.txt"
-                    # trainval_classes_file = f"{dataset_path}fgvc-aircraft-2013b/data/images_variant_trainval.txt"
-                    # files = [test_classes_file, trainval_classes_file]
+                    _images = glob(dataset_path + "fgvc-aircraft-2013b/data/images/*.jpg")
+                    test_classes_file = f"{dataset_path}fgvc-aircraft-2013b/data/images_variant_test.txt"
+                    trainval_classes_file = f"{dataset_path}fgvc-aircraft-2013b/data/images_variant_trainval.txt"
+                    files = [test_classes_file, trainval_classes_file]
 
-                    # class_per_image = {}
-                    # for f in files:
-                    #     file = open(f, "r")
-                    #     for line in file:
-                    #         line = line.strip()
+                    class_per_image = {}
+                    for f in files:
+                        file = open(f, "r")
+                        for line in file:
+                            line = line.strip()
 
-                    #         if not line:
-                    #             continue
+                            if not line:
+                                continue
 
-                    #         values = line.split(" ")
-                    #         image_name = values[0]
-                    #         class_name = values[1:]
-                    #         class_name = " ".join(class_name)
+                            values = line.split(" ")
+                            image_name = values[0]
+                            class_name = values[1:]
+                            class_name = " ".join(class_name)
 
-                    #         class_per_image[image_name] = class_name
+                            class_per_image[image_name] = class_name
                     
-                    # images_per_class = {}
-                    # for image in _images:
-                    #     image_name = image.split("/")[-1].removesuffix(".jpg")
-                    #     class_name = class_per_image[image_name]
+                    classes = set(class_per_image.values())
+                    classes = sorted(list(classes))
+                    class_to_id = {cls: idx for idx, cls in enumerate(classes)}
 
-                    #     if class_name not in images_per_class:
-                    #         images_per_class[class_name] = []
-                    #     images_per_class[class_name].append(image)
-                    
-                    # for _class in images_per_class:
-                    #     images_per_class[_class] = sorted(images_per_class[_class])
+                    train_images = open(f"{dataset_path}fgvc-aircraft-2013b/data/images_train.txt", "r")
+                    val_images = open(f"{dataset_path}fgvc-aircraft-2013b/data/images_val.txt", "r")
+                    test_images = open(f"{dataset_path}fgvc-aircraft-2013b/data/images_test.txt", "r")
 
-                    #     n_val_images = ceil(len(images_per_class[_class]) * val_percent)
+                    image_to_split = {}
+                    for line in train_images:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        image_to_split[line] = "train"
 
-                    #     match self.operation:
-                    #         case "train":
-                    #             images_per_class[_class] = images_per_class[_class][:-n_val_images]
-                    #         case "val":
-                    #             images_per_class[_class] = images_per_class[_class][-n_val_images:]
-                    #         case "all":
-                    #             pass
+                    for line in val_images:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        image_to_split[line] = "val"
 
-                    #     self.images.extend(images_per_class[_class])
+                    for line in test_images:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        image_to_split[line] = "test"
+
+                    for image in glob(dataset_path + "fgvc-aircraft-2013b/data/images/*.jpg"):
+                        image_name = image.split("/")[-1].removesuffix(".jpg")
+                        
+                        if image_to_split.get(image_name) == self.operation:
+                            class_name = class_per_image.get(image_name, None)
+                            class_id = class_to_id.get(class_name)
+
+                            self.images.append(image)
+                            self.labels.append(class_id)
 
                 case 'flowers-102':
-                    pass
-                    # image_labels_file = f"{dataset_path}flowers-102/imagelabels.mat"
-                    # labels = []
-                    # with open(image_labels_file, "rb") as file:
-                    #     data = scipy.io.loadmat(file)
-                    #     labels.extend(data.get('labels')[0])
+                    image_labels_file = f"{dataset_path}flowers-102/imagelabels.mat"
+                    setId_file = f"{dataset_path}flowers-102/setid.mat"
 
-                    # _images = sorted(glob(dataset_path + "flowers-102/jpg/*.jpg"))
+                    labels = []
+                    with open(image_labels_file, "rb") as file:
+                        data = scipy.io.loadmat(file)
+                        labels.extend(data.get('labels')[0])
+
+                    setId_file = scipy.io.loadmat(setId_file)
+                    train_ids = setId_file.get('trnid')[0]
+                    val_ids = setId_file.get('valid')[0]
+                    test_ids = setId_file.get('tstid')[0]
+
+                    image_to_split = {}
+                    for idx in train_ids:
+                        image_to_split[idx] = "train"
+                    for idx in val_ids:
+                        image_to_split[idx] = "val"
+                    for idx in test_ids:
+                        image_to_split[idx] = "test"
+
+                    _images = sorted(glob(dataset_path + "flowers-102/jpg/*.jpg"))
                     
-                    # images_per_class = {}
-                    # for i, image in enumerate(_images):
-                    #     if labels[i] not in images_per_class:
-                    #         images_per_class[labels[i]] = []
-                    #     images_per_class[labels[i]].append(image)
+                    for i, image in enumerate(_images):
+                        image_name = image.split("/")[-1].removesuffix(".jpg")
+                        image_id = int(image_name.split("_")[-1])
+                        
+                        if image_to_split.get(image_id) == self.operation:
+                            class_label = labels[i] - 1
 
-                    # for _class in images_per_class:
-                    #     images_per_class[_class] = sorted(images_per_class[_class])
-
-                    #     n_val_images = ceil(len(images_per_class[_class]) * val_percent)
-
-                    #     match self.operation:
-                    #         case "train":
-                    #             images_per_class[_class] = images_per_class[_class][:-n_val_images]
-                    #         case "val":
-                    #             images_per_class[_class] = images_per_class[_class][-n_val_images:]
-                    #         case "all":
-                    #             pass
-
-                    #     self.images.extend(images_per_class[_class])
+                            self.images.append(image)
+                            self.labels.append(class_label)
 
                 case 'food-101':
-                    pass
-                    # classes = os.listdir(dataset_path + "food-101/food-101/images/")
-                    # images_per_class = {}
-                    # for _class in classes:
-                    #     _images = glob(dataset_path + f"food-101/food-101/images/{_class}/*.jpg")
-                    #     images_per_class[_class] = sorted(_images)
+                    classes_path = open(f"{dataset_path}food-101/food-101/meta/classes.txt", "r")
+                    classes = []
+                    for line in classes_path:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        classes.append(line)
+                    class_to_id = {cls: idx for idx, cls in enumerate(classes)}
 
-                    #     n_val_images = ceil(len(images_per_class[_class]) * val_percent)
+                    train_images = open(f"{dataset_path}food-101/food-101/meta/train.txt", "r")
+                    test_images = open(f"{dataset_path}food-101/food-101/meta/test.txt", "r")
+                    image_to_split = {}
+                    for line in train_images:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        image_to_split[line] = "train"
 
-                    #     match self.operation:
-                    #         case "train":
-                    #             images_per_class[_class] = images_per_class[_class][:-n_val_images]
-                    #         case "val":
-                    #             images_per_class[_class] = images_per_class[_class][-n_val_images:]
-                    #         case "all":
-                    #             pass
+                    for line in test_images:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        image_to_split[line] = "test"
 
-                    #     self.images.extend(images_per_class[_class])
+                    for _class in classes:
+                        _images = sorted(glob(dataset_path + f"food-101/food-101/images/{_class}/*.jpg"))
+
+                        train_images = []
+                        test_images = []
+                        for image in _images:
+                            image_name = image.split("/")[-2:]
+                            image_name = "/".join(image_name).removesuffix(".jpg")
+
+                            if image_to_split.get(image_name) == "train":
+                                train_images.append(image)
+                            elif image_to_split.get(image_name) == "test":
+                                test_images.append(image)
+                        
+                        val_images_n = ceil(len(train_images) * 0.1)
+                        val_images = train_images[-val_images_n:]
+                        train_images = train_images[:-val_images_n]
+
+                        match self.operation:
+                            case "train":
+                                self.images.extend(train_images)
+                                self.labels.extend([class_to_id[_class]] * len(train_images))
+                            case "val":
+                                self.images.extend(val_images)
+                                self.labels.extend([class_to_id[_class]] * len(val_images))
+                            case "test":
+                                self.images.extend(test_images)
+                                self.labels.extend([class_to_id[_class]] * len(test_images))
 
                 case 'oxford-pets':
-                    pass
-                    # _images = glob(dataset_path + "oxford-iiit-pet/images/*.jpg")
-                    # images_per_class = {}
-                    # for image in _images:
-                    #     image_name = image.split("/")[-1]
-                    #     values = image_name.split("_")
-                    #     values.pop(-1)
-                    #     class_name = " ".join(values)
+                    test_file = open(f"{dataset_path}oxford-iiit-pet/annotations/test.txt", "r")
+                    trainval_file = open(f"{dataset_path}oxford-iiit-pet/annotations/trainval.txt", "r")
 
-                    #     if class_name not in images_per_class:
-                    #         images_per_class[class_name] = []
-                    #     images_per_class[class_name].append(image)
+                    image_to_split = {}
+                    classes = set()
+
+                    for line in trainval_file:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        image_name = line.split(" ")[0]
+                        class_name = image_name.split("_")[-5:-1]
+                        class_name = "_".join(class_name)
+                        image_to_split[image_name] = "train"
+                        classes.add(class_name)
                     
-                    # for _class in images_per_class:
-                    #     images_per_class[_class] = sorted(images_per_class[_class])
+                    class_to_id = {cls: idx for idx, cls in enumerate(sorted(classes))}
 
-                    #     n_val_images = ceil(len(images_per_class[_class]) * val_percent)
+                    for line in test_file:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        image_name = line.split(" ")[0]
+                        image_to_split[image_name] = "test"
 
-                    #     match self.operation:
-                    #         case "train":
-                    #             images_per_class[_class] = images_per_class[_class][:-n_val_images]
-                    #         case "val":
-                    #             images_per_class[_class] = images_per_class[_class][-n_val_images:]
-                    #         case "all":
-                    #             pass
+                    _images = glob(dataset_path + "oxford-iiit-pet/images/*.jpg")
 
-                    #     self.images.extend(images_per_class[_class])
+                    images_per_class = {}
+                    for image in _images:
+                        image_name = image.split("/")[-1]
+                        values = image_name.split("_")
+                        values.pop(-1)
+                        class_name = "_".join(values)
+
+                        if class_name not in images_per_class:
+                            images_per_class[class_name] = []
+                        images_per_class[class_name].append(image)
+                    
+                    for _class in images_per_class:
+                        images_per_class[_class] = sorted(images_per_class[_class])
+
+                        train_images = []
+                        test_images = []
+                        for image in images_per_class[_class]:
+                            image_name = image.split("/")[-1].removesuffix(".jpg")
+                            
+                            if image_to_split.get(image_name) == "train":
+                                train_images.append(image)
+                            elif image_to_split.get(image_name) == "test":
+                                test_images.append(image)
+
+                        n_val_images = ceil(len(images_per_class[_class]) * 0.1)
+
+                        val_images = train_images[-n_val_images:]
+                        train_images = train_images[:-n_val_images]
+
+                        match self.operation:
+                            case "train":
+                                self.images.extend(train_images)
+                                self.labels.extend([class_to_id[_class]] * len(train_images))
+                            case "val":
+                                self.images.extend(val_images)
+                                self.labels.extend([class_to_id[_class]] * len(val_images))
+                            case "test":
+                                self.images.extend(test_images)
+                                self.labels.extend([class_to_id[_class]] * len(test_images))
 
                 case 'stanford-cars':
-                    pass
-                    # train_annos = f"{dataset_path}/car_devkit/devkit/cars_train_annos.mat"
-                    # test_annos = f"{dataset_path}/car_devkit/devkit/cars_test_annos.mat"
-                    # train_images_path = f"{dataset_path}/cars_train/cars_train"
-                    # test_images_path = f"{dataset_path}/cars_test/cars_test"
+                    train_annos = f"{dataset_path}/car_devkit/devkit/cars_train_annos.mat"
+                    test_annos = f"{dataset_path}/car_devkit/devkit/cars_test_annos.mat"
+                    train_images_path = f"{dataset_path}/cars_train/cars_train"
+                    test_images_path = f"{dataset_path}/cars_test/cars_test"
 
-                    # train_images = glob(train_images_path + "/*.jpg")
-                    # test_images = glob(test_images_path + "/*.jpg")
+                    train_images = glob(train_images_path + "/*.jpg")
+                    test_images = glob(test_images_path + "/*.jpg")
 
-                    # train_data = scipy.io.loadmat(train_annos)
-                    # test_data = scipy.io.loadmat(test_annos)
+                    train_data = scipy.io.loadmat(train_annos)
+                    test_data = scipy.io.loadmat(test_annos)
 
-                    # train_labels = train_data['annotations'][0]
-                    # test_labels = test_data['annotations'][0]
+                    train_labels = train_data['annotations'][0]
+                    test_labels = test_data['annotations'][0]
 
-                    # images_per_class = {}
+                    train_images_per_class = {}
 
-                    # class_per_image = {}
-                    # for item in train_labels:
-                    #     image_name = item[-1][0]
-                    #     image_class = item[-2][0][0]
+                    train_class_per_image = {}
+                    for item in train_labels:
+                        image_name = item[-1][0]
+                        image_class = item[-2][0][0]
 
-                    #     class_per_image[image_name] = image_class
+                        train_class_per_image[image_name] = image_class
                     
-                    # for image in train_images:
-                    #     image_name = image.split("/")[-1]
-                    #     class_name = class_per_image[image_name]
-                    #     if class_name not in images_per_class:
-                    #         images_per_class[class_name] = []
-                    #     images_per_class[class_name].append(image)
-                    
-                    # class_per_image = {}
-                    # for item in test_labels:
-                    #     image_name = item[-1][0]
-                    #     image_class = item[-2][0][0]
+                    for image in train_images:
+                        image_name = image.split("/")[-1]
+                        class_name = train_class_per_image[image_name]
+                        if class_name not in train_images_per_class:
+                            train_images_per_class[class_name] = []
+                        train_images_per_class[class_name].append(image)
 
-                    #     class_per_image[image_name] = image_class
+                    test_images_per_class = {}
 
-                    # for image in test_images:
-                    #     image_name = image.split("/")[-1]
-                    #     class_name = class_per_image[image_name]
-                    #     if class_name not in images_per_class:
-                    #         images_per_class[class_name] = []
-                    #     images_per_class[class_name].append(image)
+                    test_class_per_image = {}
+                    for item in test_labels:
+                        image_name = item[-1][0]
+                        image_class = item[-2][0][0]
 
-                    # for _class in images_per_class:
-                    #     images_per_class[_class] = sorted(images_per_class[_class])
+                        test_class_per_image[image_name] = image_class
 
-                    #     n_val_images = ceil(len(images_per_class[_class]) * val_percent)
+                    for image in test_images:
+                        image_name = image.split("/")[-1]
+                        class_name = test_class_per_image[image_name]
+                        if class_name not in test_images_per_class:
+                            test_images_per_class[class_name] = []
+                        test_images_per_class[class_name].append(image)
 
-                    #     match self.operation:
-                    #         case "train":
-                    #             images_per_class[_class] = images_per_class[_class][:-n_val_images]
-                    #         case "val":
-                    #             images_per_class[_class] = images_per_class[_class][-n_val_images:]
-                    #         case "all":
-                    #             pass
+                    if self.operation == "test":
+                        for _class in test_images_per_class:
+                            self.images.extend(test_images_per_class[_class])
+                            self.labels.extend([int(_class) - 1] * len(test_images_per_class[_class]))
+                    else:
+                        for _class in train_images_per_class:
+                            class_images = train_images_per_class[_class]
+                            class_images = sorted(class_images)
 
-                    #     self.images.extend(images_per_class[_class])
-                
-                case 'stl10':
-                    pass
+                            n_val_images = ceil(len(class_images) * 0.1)
+                            val_images = class_images[-n_val_images:]
+                            train_images = class_images[:-n_val_images]
+
+                            match self.operation:
+                                case "train":
+                                    self.images.extend(train_images)
+                                    self.labels.extend([int(_class) - 1] * len(train_images))
+                                case "val":
+                                    self.images.extend(val_images)
+                                    self.labels.extend([int(_class) - 1] * len(val_images))
 
                 case 'birdsnap':
                     pass
@@ -291,14 +403,19 @@ class custom_dataset(Dataset):
                             wnid_to_class[wnid] = words
                             id_to_wnid[int(synset['ILSVRC2012_ID'][0][0][0])] = wnid
 
+                    classes = sorted(wnid_to_class.values())
+                    class_to_id = {cls: idx for idx, cls in enumerate(classes)}
+
                     match self.operation:
                         case "train":
                             train_wnid = os.listdir(dataset_path + "train/")
                             for wnid in train_wnid:
                                 _images = glob(dataset_path + "train/" + wnid + "/*.JPEG")
                                 self.images.extend(_images)
-                                self.labels.extend([wnid_to_class[wnid]] * len(_images))
-                            
+                                class_name = wnid_to_class[wnid]
+                                class_id = class_to_id[class_name]
+                                self.labels.extend([class_id] * len(_images))
+
                         case "val":
                             val_images = sorted(glob(dataset_path + "val/*.JPEG"))
 
@@ -315,13 +432,15 @@ class custom_dataset(Dataset):
                                 wnid = idx_to_wnid[idx]
 
                                 self.images.append(image)
-                                self.labels.append(wnid_to_class[wnid])
+                                class_name = wnid_to_class[wnid]
+                                class_id = class_to_id[class_name]
+                                self.labels.append(class_id)
 
                         case "test":
                             test_images = sorted(glob(dataset_path + "test/*.JPEG"))
                             self.images.extend(test_images)
                             self.labels.extend([None] * len(test_images))  # Labels are not available
-    
+
     def __len__(self):
         return len(self.images)
 
