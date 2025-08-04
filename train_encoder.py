@@ -71,7 +71,7 @@ def get_args():
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--config", type=str, help="Path to the config file", required=True)
-    parser.add_argument("--gpu", type=int, help="GPU index to use", required=True)
+    parser.add_argument("--gpu", type=int, help="GPU index to use", required=False)
 
     return parser.parse_args()
 

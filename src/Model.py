@@ -19,7 +19,7 @@ from .nt_xent import nt_xent
 class Model():
     def __init__(self, config_path, gpu_index, operation):
         self.operation = operation
-        self.device = torch.device(f'cuda:{gpu_index}' if torch.cuda.is_available() else 'cpu')
+        self.device = torch.device(f'cuda:{gpu_index}' if torch.cuda.is_available() else 'cpu') if gpu_index is not None else torch.device('cpu')
 
         match operation:
             case "train_encoder":
@@ -196,17 +196,22 @@ class Model():
 
         mean = torch.zeros(num_channels, device=self.device)
         std = torch.zeros(num_channels, device=self.device)
-        total_samples = 0
+        total_pixels = 0
+
         for images, _ in dataloader:
             images = images.to(self.device)
             batch_samples = images.size(0)
-            total_samples += batch_samples
-            for i in range(num_channels):
-                mean[i] += images[:, i, :, :].mean().item() * batch_samples
-                std[i] += images[:, i, :, :].std().item() * batch_samples
+            pixels_per_channel = batch_samples * images.size(2) * images.size(3)
+            total_pixels += pixels_per_channel
 
-        self.mean = [m.cpu().item() / total_samples for m in mean]
-        self.std = [s.cpu().item() / total_samples for s in std]
+            mean += images.sum(dim=[0, 2, 3])
+            std += (images ** 2).sum(dim=[0, 2, 3])
+
+        mean /= total_pixels
+        std = torch.sqrt(std / total_pixels - mean ** 2)
+
+        self.mean = mean.cpu().tolist()
+        self.std = std.cpu().tolist()
 
     def _load_backbone(self):
         self.model = None
