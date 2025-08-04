@@ -21,6 +21,10 @@ class Model():
         self.operation = operation
         self.device = torch.device(f'cuda:{gpu_index}' if torch.cuda.is_available() else 'cpu') if gpu_index is not None else torch.device('cpu')
 
+        if self.device == torch.device('cpu'):
+            torch.set_num_threads(os.cpu_count())
+            torch.set_num_interop_threads(os.cpu_count())
+
         match operation:
             case "train_encoder":
                 self._create_train_encoder_output_path(config_path)
@@ -128,7 +132,7 @@ class Model():
             batch_size=self.train_encoder_batch_size,
             num_workers=self.train_encoder_num_workers,
             shuffle=True,
-            pin_memory=True,
+            pin_memory=True if self.device.type == 'cuda' else False
         )
 
         val_dataset = custom_dataset(
@@ -144,7 +148,7 @@ class Model():
             batch_size=self.train_encoder_batch_size,
             num_workers=self.train_encoder_num_workers,
             shuffle=False,
-            pin_memory=True,
+            pin_memory=True if self.device.type == 'cuda' else False
         )
 
     def _load_train_encoder_transform(self):
@@ -191,7 +195,7 @@ class Model():
             dataset,
             batch_size=self.train_encoder_batch_size,
             num_workers=self.train_encoder_num_workers,
-            pin_memory=True,
+            pin_memory=True if self.device.type == 'cuda' else False
         )
 
         mean = torch.zeros(num_channels, device=self.device)
