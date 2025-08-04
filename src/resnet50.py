@@ -20,6 +20,7 @@ class resnet50(nn.Module):
         self.projection_dim = projection_dim
         self.backbone = models.resnet50(weights=None) # Training from scratch
         self.projection_head = None
+        self.encoder_out_features = self.backbone.fc.in_features
 
         self._load_projection_head()
 
@@ -30,17 +31,17 @@ class resnet50(nn.Module):
         match self.projection_head_mode:
             case 'linear':
                 self.projection_head = nn.Sequential(
-                    nn.Linear(self.backbone.fc.in_features, self.projection_dim, bias=False),
+                    nn.Linear(self.encoder_out_features, self.projection_dim, bias=False),
                     nn.BatchNorm1d(self.projection_dim),
                 )
 
 
             case 'non-linear':
                 self.projection_head = nn.Sequential(
-                    nn.Linear(self.backbone.fc.in_features, self.backbone.fc.in_features, bias=False),
-                    nn.BatchNorm1d(self.backbone.fc.in_features),
+                    nn.Linear(self.encoder_out_features, self.encoder_out_features, bias=False),
+                    nn.BatchNorm1d(self.encoder_out_features),
                     nn.ReLU(),
-                    nn.Linear(self.backbone.fc.in_features, self.projection_dim, bias=False),
+                    nn.Linear(self.encoder_out_features, self.projection_dim, bias=False),
                     nn.BatchNorm1d(self.projection_dim),
                 )
             
@@ -49,15 +50,21 @@ class resnet50(nn.Module):
         
         if self.projection_head is None:
             raise ValueError("Projection head mode must be 'linear', 'non-linear', or 'none'.")
-        
+    
+    def freeze_encoder(self):
+        for param in self.backbone.parameters():
+            param.requires_grad = False
+        for param in self.backbone.fc.parameters():
+            param.requires_grad = True
+
     def fit_projection_head(self):
         self.backbone.fc = self.projection_head
     
     def remove_projection_head(self):
         self.backbone.fc = nn.Identity()
 
-    def fit_classifier(self, num_classes):
-        pass
+    def fit_classifier_head(self, num_classes):
+        self.backbone.fc = nn.Linear(self.encoder_out_features, num_classes, bias=True)
 
     def forward(self, x1, x2=None):
         x1 = self.backbone(x1)

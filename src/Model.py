@@ -16,9 +16,25 @@ from .resnet50 import resnet50
 from .custom_dataset import custom_dataset
 from .nt_xent import nt_xent
 
+NUM_CLASSES = {
+    'cifar10': 10,
+    'cifar100': 100,
+    'imagenet': 1000,
+    'dtd': 47,
+    'fgvc-aircraft': 100,
+    'flowers-102': 102,
+    'food-101': 101,
+    'oxford-pets': 37,
+    'stanford-cars': 196
+}
+
+'''
+execution_name is used for linear evaluation and fine tuning to load a determined execution of train_encoder.py
+'''
 class Model():
-    def __init__(self, config_path, gpu_index, operation):
+    def __init__(self, config_path, gpu_index, operation, execution_name=None):
         self.operation = operation
+        self.execution_name = execution_name if execution_name is not None else None
         self.device = torch.device(f'cuda:{gpu_index}' if torch.cuda.is_available() else 'cpu') if gpu_index is not None else torch.device('cpu')
 
         if self.device == torch.device('cpu'):
@@ -40,20 +56,44 @@ class Model():
                 self._load_train_encoder_dataloaders()
 
                 self._load_train_encoder_criterion()
-
                 self._load_train_encoder_optimizer()
                 self._load_train_encoder_scheduler()
+            
+            case "linear_evaluation":
+                self._load_linear_evaluation_config(config_path)
+                self._load_train_encoder_config(self.linear_evaluation_encoder_config_path)
+
+                self._create_linear_evaluation_output_path()
+
+                self._load_backbone()
+                self._load_encoder_weight()
+                self._fit_classifier_head()
+                self._freeze_encoder()
+
+                self._load_normalization() # Load mean and std from JSON
+
+                self._load_linear_evaluation_transform()
+                self._load_linear_evaluation_dataloaders()
+
+                self._load_linear_evaluation_criterion()
+                self._load_linear_evaluation_optimizer()
 
        # ...
+
+    def get_linear_evaluation_train_datasets(self):
+        return self.linear_evaluation_train_datasets
+    
+    def get_linear_evaluation_batch_size(self):
+        return self.linear_evaluation_batch_size
+    
+    def get_linear_evaluation_num_epochs(self):
+        return self.linear_evaluation_num_epochs
 
     def get_learning_rate(self):
         return float(self.get_optimizer().param_groups[0]['lr'])
 
-    def get_batch_size(self):
+    def get_train_encoder_batch_size(self):
         return self.train_encoder_batch_size
-
-    def get_target_batch_size(self):
-        return self.train_encoder_target_batch_size
 
     def get_criterion(self):
         return self.criterion
@@ -66,6 +106,9 @@ class Model():
     
     def get_optimizer(self):
         return self.optimizer
+    
+    def _load_linear_evaluation_criterion(self):
+        self.criterion = nn.CrossEntropyLoss()
     
     def _load_train_encoder_criterion(self):
         self.criterion = nt_xent(self.train_encoder_temperature)
@@ -81,24 +124,42 @@ class Model():
         self.scheduler = torch.optim.lr_scheduler.LambdaLR(self.optimizer, lr_lambda=__lr_lambda)
 
     '''
+    The SimCLR defines lr = 0.1 * batch_size / 256 (B.6.)
+    It also uses SGD with momentum 0.9, no use of weight decay and a warmup
+    '''
+    def _load_linear_evaluation_optimizer(self):
+        self.optimizer = optim.SGD(self.model.parameters(), lr=0.1 * self.linear_evaluation_batch_size / 256, momentum=0.9, weight_decay=0.0)
+
+    '''
     The SimCLR defines lr = 0.3 * batch_size / 256
     '''
     def _load_train_encoder_optimizer(self):
-        base_optimizer = optim.Adam(self.model.parameters(), lr=0.3 * self.train_encoder_batch_size / 256, weight_decay=1e-6)
-        self.optimizer = base_optimizer
+        self.optimizer = optim.Adam(self.model.parameters(), lr=0.3 * self.train_encoder_batch_size / 256, weight_decay=1e-6)
 
         # Still have to make LARS
 
     def save_model(self):
-        os.makedirs(self.train_encoder_output_path + "/models", exist_ok=True)
+        match self.operation:
+            case "train_encoder":
+                os.makedirs(self.train_encoder_output_path + "/models", exist_ok=True)
+                torch.save(self.model.state_dict(), os.path.join(self.train_encoder_output_path, "models", "model.pth"))
 
-        torch.save(self.model.state_dict(), os.path.join(self.train_encoder_output_path, "models", "model.pth"))
+            case "linear_evaluation":
+                models_path = self.linear_evaluation_output_path + "models"
+                os.makedirs(models_path, exist_ok=True)
+                torch.save(self.model.state_dict(), os.path.join(models_path, "model.pth"))
+            
+            case "transfer_learning":
+                pass
 
     def get_train_dataloader(self):
         return self.train_dataloader
     
     def get_val_dataloader(self):
         return self.val_dataloader
+    
+    def get_test_dataloader(self):
+        return self.test_dataloader
 
     def model_infer(self, x1, x2=None):
         x1 = x1.to(self.device)
@@ -117,6 +178,55 @@ class Model():
 
     def model_to_eval(self):
         self.model.eval()
+
+    def _load_linear_evaluation_dataloaders(self):
+        train_dataset = custom_dataset(
+            operation="train",
+            apply_data_augmentation=False,
+            datasets=self.linear_evaluation_train_datasets,
+            datasets_folder_path=self.train_encoder_datasets_path,
+            transform=self.linear_evaluation_transform_train
+        )
+
+        self.train_dataloader = torch.utils.data.DataLoader(
+            dataset=train_dataset,
+            batch_size=self.linear_evaluation_batch_size,
+            num_workers=self.train_encoder_num_workers,
+            shuffle=True,
+            pin_memory=True if self.device.type == 'cuda' else False
+        )
+
+        val_dataset = custom_dataset(
+            operation="val",
+            apply_data_augmentation=False,
+            datasets=self.linear_evaluation_train_datasets,
+            datasets_folder_path=self.train_encoder_datasets_path,
+            transform=self.linear_evaluation_transform_val_test
+        )
+
+        self.val_dataloader = torch.utils.data.DataLoader(
+            dataset=val_dataset,
+            batch_size=self.linear_evaluation_batch_size,
+            num_workers=self.train_encoder_num_workers,
+            shuffle=False,
+            pin_memory=True if self.device.type == 'cuda' else False
+        )
+
+        test_dataset = custom_dataset(
+            operation="test",
+            apply_data_augmentation=False,
+            datasets=self.linear_evaluation_train_datasets,
+            datasets_folder_path=self.train_encoder_datasets_path,
+            transform=self.linear_evaluation_transform_val_test
+        )
+
+        self.test_dataloader = torch.utils.data.DataLoader(
+            dataset=test_dataset,
+            batch_size=self.linear_evaluation_batch_size,
+            num_workers=self.train_encoder_num_workers,
+            shuffle=False,
+            pin_memory=True if self.device.type == 'cuda' else False
+        )
 
     def _load_train_encoder_dataloaders(self):
         train_dataset = custom_dataset(
@@ -170,6 +280,69 @@ class Model():
             v2.Normalize(mean=self.mean, std=self.std)
         ])
 
+    def _load_linear_evaluation_transform(self):
+        self.linear_evaluation_transform_train = v2.Compose([
+            v2.RandomResizedCrop(self.train_encoder_transform_resize), # SimCLR B.6.
+            v2.RandomHorizontalFlip(0.5) , # SimCLR B.6.
+            v2.ToImage(),
+            v2.ToDtype(torch.float32, scale=True),
+            v2.Normalize(mean=self.mean, std=self.std)
+        ])
+
+        self.linear_evaluation_transform_val_test = v2.Compose([
+            v2.Resize(self.train_encoder_transform_resize),
+            v2.ToImage(),
+            v2.ToDtype(torch.float32, scale=True),
+            v2.Normalize(mean=self.mean, std=self.std)
+        ])
+
+    def save_results(self, targets, top_5_predictions, top_1_predictions):
+        def _compute_accuracy(predictions_batches, targets_batches, is_top_k=False):
+            correct = 0
+            total = 0
+            
+            for batch_idx in range(len(predictions_batches)):
+                batch_preds = predictions_batches[batch_idx]
+                batch_targets = targets_batches[batch_idx]
+                batch_size = len(batch_targets)
+
+                total += batch_size
+                
+                for i in range(batch_size):
+                    target = batch_targets[i]
+                    pred = batch_preds[i]
+                    
+                    if is_top_k:
+                        if target in pred:
+                            correct += 1
+                    else:
+                        if target == pred.item():
+                            correct += 1
+            
+            return correct / total
+
+        output_path = None
+        match self.operation:
+            case "train_encoder": output_path = self.train_encoder_output_path
+            case "linear_evaluation": output_path = self.linear_evaluation_output_path
+            case "transfer_learning": output_path = self.transfer_learning_output_path
+
+        top_5_accuracy = _compute_accuracy(top_5_predictions, targets, is_top_k=True)
+        top_1_accuracy = _compute_accuracy(top_1_predictions, targets)
+
+        with open(os.path.join(output_path, "results.json"), "w") as f:
+            json.dump({
+                "top_5_accuracy": top_5_accuracy,
+                "top_1_accuracy": top_1_accuracy
+            }, f)
+
+    def _load_normalization(self):
+        normalization_json_path = f"{self.train_encoder_output_path}{self.execution_name}/train_encoder/normalization.json"
+        normalization_json = json.load(open(normalization_json_path, "r"))
+
+        self.mean = normalization_json["mean"]
+        self.std = normalization_json["std"]
+
     def _save_normalization(self):
         with open(os.path.join(self.train_encoder_output_path, "normalization.json"), "w") as f:
             json.dump({"mean": self.mean, "std": self.std}, f)
@@ -217,6 +390,23 @@ class Model():
         self.mean = mean.cpu().tolist()
         self.std = std.cpu().tolist()
 
+    def get_device(self):
+        return self.device
+
+    def _load_weight(self, model_path):
+        if not os.path.exists(model_path):
+            raise FileNotFoundError(f"Model file {model_path} does not exist.")
+
+        self.model.load_state_dict(torch.load(model_path, map_location=self.device))
+        self.model.to(self.device)
+
+    def _load_encoder_weight(self):
+        model_path = f"{self.train_encoder_output_path}{self.execution_name}/train_encoder/models/model.pth"
+
+        self._fit_projection_head()
+        self._load_weight(model_path)
+        self._remove_projection_head()
+
     def _load_backbone(self):
         self.model = None
 
@@ -237,11 +427,26 @@ class Model():
 
         self.model.to(self.device)
     
+    def _freeze_encoder(self):
+        self.model.freeze_encoder()
+
+    def _fit_classifier_head(self):
+        self.model.fit_classifier_head(num_classes=NUM_CLASSES[self.linear_evaluation_train_datasets[0]])
+
     def _fit_projection_head(self):
         self.model.fit_projection_head()
     
     def _remove_projection_head(self):
         self.model.remove_projection_head()
+
+    def _create_linear_evaluation_output_path(self):
+        datasets_str = "_".join(self.linear_evaluation_train_datasets)
+
+        self.linear_evaluation_output_path = self.train_encoder_output_path + f"{self.execution_name}/linear_evaluation_{datasets_str}"
+
+        os.makedirs(self.linear_evaluation_output_path, exist_ok=True)
+        shutil.copyfile(self.linear_evaluation_encoder_config_path, os.path.join(self.linear_evaluation_output_path, "encoder_config.yaml"))
+        shutil.copyfile(self.linear_evaluation_config_path, os.path.join(self.linear_evaluation_output_path, "config.yaml"))
 
     def _create_train_encoder_output_path(self, config_path):
         config = yaml.safe_load(open(config_path, 'r'))
@@ -259,6 +464,15 @@ class Model():
         os.makedirs(self.train_encoder_output_path, exist_ok=True)
         shutil.copyfile(config_path, os.path.join(self.train_encoder_output_path, "config.yaml"))
 
+    def _load_linear_evaluation_config(self, config_path):
+        config = yaml.safe_load(open(config_path, 'r'))
+
+        self.linear_evaluation_train_datasets = config['train_datasets']
+        self.linear_evaluation_batch_size = config['batch_size']
+        self.linear_evaluation_num_epochs = config['num_epochs']
+        self.linear_evaluation_encoder_config_path = config['encoder_config']
+        self.linear_evaluation_config_path = config_path
+
     def _load_train_encoder_config(self, config_path):
         config = yaml.safe_load(open(config_path, 'r'))
 
@@ -266,6 +480,8 @@ class Model():
         config['datasets_path'] += '/' if not config['datasets_path'].endswith('/') else ''
 
         # Configs to class attributes
+        self.train_encoder_output_path = str(config['output_path'])
+        self.train_encoder_datasets_path = str(config['datasets_path'])
         self.train_encoder_datasets_path = str(config['datasets_path'])
         self.train_encoder_batch_size = int(config['batch_size'])
         self.train_encoder_num_epochs = int(config['num_epochs'])
@@ -280,7 +496,14 @@ class Model():
 
     def write_on_log(self, text):
         time = strftime("%Y-%m-%d %H:%M:%S - ", localtime())
-        mode = "w" if not os.path.exists(os.path.join(self.train_encoder_output_path, "log.txt")) else "a"
 
-        with open(os.path.join(self.train_encoder_output_path, "log.txt"), mode) as file:
+        output_path = None
+        match self.operation:
+            case "train_encoder": output_path = self.train_encoder_output_path
+            case "linear_evaluation": output_path = self.linear_evaluation_output_path
+            case "transfer_learning": output_path = self.transfer_learning_output_path
+
+        mode = "w" if not os.path.exists(os.path.join(output_path, "log.txt")) else "a"
+
+        with open(os.path.join(output_path, "log.txt"), mode) as file:
             file.write(time + text + "\n")

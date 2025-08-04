@@ -23,7 +23,7 @@ def main():
 Selecting the epoch with the lowest validation loss
 '''
 def train(model):
-    model.write_on_log(f"Starting training. Learning rate: {model.get_learning_rate()}")
+    model.write_on_log(f"Starting training...")
 
     best_val_loss = float('inf')
     for epoch in range(model.get_train_encoder_num_epochs()):

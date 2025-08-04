@@ -7,8 +7,12 @@ from random import shuffle
 import torchvision.transforms as v2
 import scipy.io
 
+# For datasets with no validation set, we use 10% of the training set as validation
 CIFAR_VAL_PERCENT = 0.1
 
+'''
+apply_data_augmentation: if True, the dataset will return two augmented versions of the same image
+'''
 class custom_dataset(Dataset):
     def __init__(self, operation, apply_data_augmentation, datasets, datasets_folder_path, transform):
         if operation not in ["train", "val", "test"]:
