@@ -1,3 +1,4 @@
+import torch.utils.checkpoint
 from torchvision.transforms import v2
 import torch
 import yaml
@@ -66,11 +67,39 @@ class resnet50(nn.Module):
     def fit_classifier_head(self, num_classes):
         self.backbone.fc = nn.Linear(self.encoder_out_features, num_classes, bias=True)
 
+    # def forward(self, x1, x2=None):
+    #     def _run_backbone(x):
+    #         return self.backbone(x)
+
+    #     x1 = torch.utils.checkpoint.checkpoint(_run_backbone, x1, use_reentrant=False)
+
+    #     torch.cuda.empty_cache()
+
+    #     if x2 is not None:
+    #         x2 = torch.utils.checkpoint.checkpoint(_run_backbone, x2, use_reentrant=False)
+
+    #         torch.cuda.empty_cache()
+
+    #         return x1, x2
+
+    #     return x1
+
     def forward(self, x1, x2=None):
-        x1 = self.backbone(x1)
+        def _forward_chunk(x):
+            for name, module in self.backbone._modules.items():
+                if name != 'fc':
+                    x = module(x)
+            x = torch.flatten(x, 1)
 
+            return x
+        
+        x1_out = torch.utils.checkpoint.checkpoint(_forward_chunk, x1, use_reentrant=False)
+        torch.cuda.empty_cache()
+        
         if x2 is not None:
-            x2 = self.backbone(x2)
-            return x1, x2
-
-        return x1
+            x2_out = torch.utils.checkpoint.checkpoint(_forward_chunk, x2, use_reentrant=False)
+            torch.cuda.empty_cache()
+            
+            return self.backbone.fc(x1_out), self.backbone.fc(x2_out)
+        
+        return self.backbone.fc(x1_out)

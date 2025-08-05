@@ -94,6 +94,9 @@ class Model():
 
     def get_train_encoder_batch_size(self):
         return self.train_encoder_batch_size
+    
+    def get_gpu_index(self):
+        return self.device.index if self.device.type == 'cuda' else None
 
     def get_criterion(self):
         return self.criterion
@@ -134,7 +137,7 @@ class Model():
     The SimCLR defines lr = 0.3 * batch_size / 256
     '''
     def _load_train_encoder_optimizer(self):
-        self.optimizer = optim.Adam(self.model.parameters(), lr=0.3 * self.train_encoder_batch_size / 256, weight_decay=1e-6)
+        self.optimizer = optim.SGD(self.model.parameters(), lr=0.3 * self.train_encoder_batch_size / 256, momentum=0.9, weight_decay=0.0)
 
         # Still have to make LARS
 
@@ -161,14 +164,49 @@ class Model():
     def get_test_dataloader(self):
         return self.test_dataloader
 
+    # def model_infer(self, x1, x2=None):
+    #     x1 = x1.to(self.device)
+
+    #     if x2 is not None:
+    #         x2 = x2.to(self.device)
+
+    #         return self.model(x1, x2)
+    #     return self.model(x1)
+
     def model_infer(self, x1, x2=None):
-        x1 = x1.to(self.device)
+        chunk_size = 128
+        
+        result_list = []
+        for i in range(0, x1.size(0), chunk_size):
+            chunk = x1[i:i + chunk_size].to(self.device)
+        
+            result = self.model(chunk)
+            
+            result_list.append(result.cpu())
 
+            del chunk, result
+            torch.cuda.empty_cache()
+
+        z1 = torch.cat(result_list, dim=0).to(self.device)
+        
         if x2 is not None:
-            x2 = x2.to(self.device)
+            result_list = []
+            
+            for i in range(0, x2.size(0), chunk_size):
+                chunk = x2[i:i + chunk_size].to(self.device)
+                
+                result = self.model(chunk)
+                
+                result_list.append(result.cpu())
+                
+                del chunk, result
+                torch.cuda.empty_cache()
+            
+            z2 = torch.cat(result_list, dim=0).to(self.device)
 
-            return self.model(x1, x2)
-        return self.model(x1)
+            return z1, z2
+
+        return z1
 
     def get_train_encoder_num_epochs(self):
         return self.train_encoder_num_epochs
@@ -426,6 +464,7 @@ class Model():
         assert self.model is not None, f"Model {self.train_encoder_model_name} doesn't exist."
 
         self.model.to(self.device)
+        self.model = torch.compile(self.model, mode='max-autotune', fullgraph=True)
     
     def _freeze_encoder(self):
         self.model.freeze_encoder()
@@ -480,7 +519,8 @@ class Model():
         config['datasets_path'] += '/' if not config['datasets_path'].endswith('/') else ''
 
         # Configs to class attributes
-        self.train_encoder_output_path = str(config['output_path'])
+        if self.operation != "train_encoder":
+            self.train_encoder_output_path = str(config['output_path'])
         self.train_encoder_datasets_path = str(config['datasets_path'])
         self.train_encoder_datasets_path = str(config['datasets_path'])
         self.train_encoder_batch_size = int(config['batch_size'])
