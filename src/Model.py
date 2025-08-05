@@ -464,7 +464,6 @@ class Model():
         assert self.model is not None, f"Model {self.train_encoder_model_name} doesn't exist."
 
         self.model.to(self.device)
-        self.model = torch.compile(self.model, mode='max-autotune', fullgraph=True)
     
     def _freeze_encoder(self):
         self.model.freeze_encoder()
