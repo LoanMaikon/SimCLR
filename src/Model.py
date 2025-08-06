@@ -164,22 +164,11 @@ class Model():
     def get_test_dataloader(self):
         return self.test_dataloader
 
-    # def model_infer(self, x1, x2=None):
-    #     x1 = x1.to(self.device)
-
-    #     if x2 is not None:
-    #         x2 = x2.to(self.device)
-
-    #         return self.model(x1, x2)
-    #     return self.model(x1)
-
     def model_infer(self, x1, x2=None):
-        chunk_size = 128
-        
         result_list = []
-        for i in range(0, x1.size(0), chunk_size):
-            chunk = x1[i:i + chunk_size].to(self.device)
-        
+        for i in range(0, x1.size(0), self.train_encoder_chunk_size):
+            chunk = x1[i:i + self.train_encoder_chunk_size].to(self.device)
+
             result = self.model(chunk)
             
             result_list.append(result.cpu())
@@ -191,10 +180,10 @@ class Model():
         
         if x2 is not None:
             result_list = []
-            
-            for i in range(0, x2.size(0), chunk_size):
-                chunk = x2[i:i + chunk_size].to(self.device)
-                
+
+            for i in range(0, x2.size(0), self.train_encoder_chunk_size):
+                chunk = x2[i:i + self.train_encoder_chunk_size].to(self.device)
+
                 result = self.model(chunk)
                 
                 result_list.append(result.cpu())
@@ -532,6 +521,7 @@ class Model():
         self.train_encoder_temperature = float(config['temperature'])
         self.train_encoder_projection_dim = int(config['projection_dim'])
         self.train_encoder_warmup_epochs = int(config['warmup_epochs'])
+        self.train_encoder_chunk_size = int(config['chunk_size'])
 
     def write_on_log(self, text):
         time = strftime("%Y-%m-%d %H:%M:%S - ", localtime())

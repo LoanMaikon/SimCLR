@@ -21,11 +21,14 @@ def main():
 
         train(model)
         test(model)
-    
+
+'''
+Selecting the epoch with the lowest training loss
+'''
 def train(model):
     model.write_on_log(f"Starting training...")
 
-    best_val_loss = float('inf')
+    best_train_loss = float('inf')
     for epoch in range(model.get_linear_evaluation_num_epochs()):
         model.write_on_log(f"Epoch {epoch + 1}/{model.get_linear_evaluation_num_epochs()}")
 
@@ -47,23 +50,9 @@ def train(model):
         epoch_train_loss /= len(model.get_train_dataloader())
         model.write_on_log(f"Training loss: {epoch_train_loss:.4f}")
 
-        model.model_to_eval()
-
-        epoch_val_loss = 0.0
-        with torch.no_grad():
-            for batch in model.get_val_dataloader():
-                z1 = model.model_infer(batch[0])
-                targets = batch[1].to(model.get_device())
-
-                loss = model.apply_criterion(z1, targets)
-                epoch_val_loss += loss.item()
-
-        epoch_val_loss /= len(model.get_val_dataloader())
-        model.write_on_log(f"Validation loss: {epoch_val_loss:.4f}")
-        
-        if epoch_val_loss < best_val_loss:
-            model.write_on_log(f"Validation loss improved from {best_val_loss:.4f} to {epoch_val_loss:.4f}. Saving model...")
-            best_val_loss = epoch_val_loss
+        if epoch_train_loss < best_train_loss:
+            model.write_on_log(f"Training loss improved from {best_train_loss:.4f} to {epoch_train_loss:.4f}. Saving model...")
+            best_train_loss = epoch_train_loss
             model.save_model()
 
         model.write_on_log(f"")
@@ -86,12 +75,12 @@ def test(model):
 
             _, top_5 = output.topk(5, dim=1)
             top_5 = top_5.cpu().numpy()
-            top_5_predictions.append(top_5)
+            top_5_predictions.extend(top_5)
 
             top_1 = output.argmax(dim=1, keepdim=True).cpu().numpy()
-            top_1_predictions.append(top_1)
+            top_1_predictions.extend(top_1)
 
-            all_targets.append(targets.cpu().numpy())
+            all_targets.extend(targets.cpu().numpy())
 
     model.save_results(
         targets=all_targets,

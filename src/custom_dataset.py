@@ -420,7 +420,10 @@ class custom_dataset(Dataset):
                                 class_id = class_to_id[class_name]
                                 self.labels.extend([class_id] * len(_images))
 
-                        case "val":
+                        case "test":
+                            '''
+                            SimCLR uses the validation set for testing
+                            '''
                             val_images = sorted(glob(dataset_path + "val/*.JPEG"))
 
                             idx_to_wnid = {}
@@ -440,10 +443,8 @@ class custom_dataset(Dataset):
                                 class_id = class_to_id[class_name]
                                 self.labels.append(class_id)
 
-                        case "test":
-                            test_images = sorted(glob(dataset_path + "test/*.JPEG"))
-                            self.images.extend(test_images)
-                            self.labels.extend([None] * len(test_images))  # Labels are not available
+                        case "val":
+                            raise ValueError("ImageNet has only train and test configs")
 
     def __len__(self):
         return len(self.images)

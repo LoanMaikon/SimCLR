@@ -1,7 +1,8 @@
 output_path: /disk0/lmk22/simclr_output/train_encoder_cifar10
 datasets_path: /disk0/lmk22/datasets
 train_datasets: [cifar10]
-batch_size: 256 # Batch size to process at the same time since we can't use 4096 in one GPU
+batch_size: 1024 # Batch size to process at the same time since we can't use 4096 in one GPU
+chunk_size: 128 # Number of samples to infer at the same time
 num_epochs: 100 # The paper uses 100 epochs
 num_workers: 64
 model: resnet50
