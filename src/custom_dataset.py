@@ -11,16 +11,18 @@ import scipy.io
 CIFAR_VAL_PERCENT = 0.1
 
 '''
-apply_data_augmentation: if True, the dataset will return two augmented versions of the same image
+apply_data_augmentation: if True, the dataset will return two augmented versions of the same image. Else, it will return the original image with preprocessing
+label_fraction: if not None, the dataset will return only a fraction of the labels, used for linear evaluation and transfer learning
 '''
 class custom_dataset(Dataset):
-    def __init__(self, operation, apply_data_augmentation, datasets, datasets_folder_path, transform):
+    def __init__(self, operation, apply_data_augmentation, datasets, datasets_folder_path, transform, label_fraction=None):
         if operation not in ["train", "val", "test"]:
             raise ValueError("Operation must be 'train', 'val', or 'test'.")
         
         self.operation = operation
         self.apply_data_augmentation = apply_data_augmentation
         self.transform = transform
+        self.label_fraction = label_fraction
 
         self.images = []
         self.labels = []
@@ -445,6 +447,33 @@ class custom_dataset(Dataset):
 
                         case "val":
                             raise ValueError("ImageNet has only train and test configs")
+            
+        if self.label_fraction is not None:
+            self._apply_label_fraction()
+    
+    '''
+    Reducing each class's images to a fraction of the total images in that class
+    '''
+    def _apply_label_fraction(self):
+        if self.label_fraction < 0.01 or self.label_fraction > 1:
+            raise ValueError("label_fraction must be between 0.01 and 1")
+
+        unique_labels = set(self.labels)
+        label_to_images = {label: [] for label in unique_labels}
+
+        for image, label in zip(self.images, self.labels):
+            label_to_images[label].append(image)
+
+        self.images = []
+        self.labels = []
+
+        for label, images in label_to_images.items():
+            n_images = ceil(len(images) * self.label_fraction)
+            images = sorted(images)
+            selected_images = images[:n_images]
+
+            self.images.extend(selected_images)
+            self.labels.extend([label] * len(selected_images))
 
     def __len__(self):
         return len(self.images)
@@ -461,4 +490,5 @@ class custom_dataset(Dataset):
             return x1, x2
         
         image = self.transform(image)
+
         return image, self.labels[idx]

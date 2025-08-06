@@ -32,10 +32,11 @@ NUM_CLASSES = {
 execution_name is used for linear evaluation and fine tuning to load a determined execution of train_encoder.py
 '''
 class Model():
-    def __init__(self, config_path, gpu_index, operation, execution_name=None):
+    def __init__(self, config_path, gpu_index, operation, execution_name=None, label_fraction=None):
         self.operation = operation
         self.execution_name = execution_name if execution_name is not None else None
         self.device = torch.device(f'cuda:{gpu_index}' if torch.cuda.is_available() else 'cpu') if gpu_index is not None else torch.device('cpu')
+        self.label_fraction = label_fraction
 
         if self.device == torch.device('cpu'):
             torch.set_num_threads(os.cpu_count())
@@ -101,6 +102,25 @@ class Model():
     def get_criterion(self):
         return self.criterion
     
+    '''
+    Check if the dataset has a validation set
+    We use the validation set of imagenet to test
+    '''
+    def has_validation_set(self):
+        set = None
+        match self.operation:
+            case "train_encoder":
+                set = self.train_encoder_train_datasets
+            case "linear_evaluation":
+                set = self.linear_evaluation_train_datasets
+            case "transfer_learning":
+                set = self.transfer_learning_train_datasets
+        
+        if "imagenet" in set:
+            return False
+        return True
+
+    
     def apply_criterion(self, z1, z2):
         return self.criterion(z1, z2)
 
@@ -150,7 +170,7 @@ class Model():
             case "linear_evaluation":
                 models_path = self.linear_evaluation_output_path + "models"
                 os.makedirs(models_path, exist_ok=True)
-                torch.save(self.model.state_dict(), os.path.join(models_path, "model.pth"))
+                torch.save(self.model.state_dict(), os.path.join(models_path, f"model_{str(self.label_fraction * 100)}.pth"))
             
             case "transfer_learning":
                 pass
@@ -212,7 +232,8 @@ class Model():
             apply_data_augmentation=False,
             datasets=self.linear_evaluation_train_datasets,
             datasets_folder_path=self.train_encoder_datasets_path,
-            transform=self.linear_evaluation_transform_train
+            transform=self.linear_evaluation_transform_train,
+            label_fraction=self.label_fraction
         )
 
         self.train_dataloader = torch.utils.data.DataLoader(
@@ -228,7 +249,7 @@ class Model():
             apply_data_augmentation=False,
             datasets=self.linear_evaluation_train_datasets,
             datasets_folder_path=self.train_encoder_datasets_path,
-            transform=self.linear_evaluation_transform_val_test
+            transform=self.linear_evaluation_transform_val_test,
         )
 
         self.val_dataloader = torch.utils.data.DataLoader(
@@ -323,45 +344,54 @@ class Model():
             v2.Normalize(mean=self.mean, std=self.std)
         ])
 
-    def save_results(self, targets, top_5_predictions, top_1_predictions):
-        def _compute_accuracy(predictions_batches, targets_batches, is_top_k=False):
+    def save_results(self, targets, all_predictions):
+        def _compute_top_accuracy(all_predictions, targets, top_k=1):
             correct = 0
             total = 0
-            
-            for batch_idx in range(len(predictions_batches)):
-                batch_preds = predictions_batches[batch_idx]
-                batch_targets = targets_batches[batch_idx]
-                batch_size = len(batch_targets)
 
-                total += batch_size
-                
-                for i in range(batch_size):
-                    target = batch_targets[i]
-                    pred = batch_preds[i]
-                    
-                    if is_top_k:
-                        if target in pred:
-                            correct += 1
-                    else:
-                        if target == pred.item():
-                            correct += 1
+            for i in range(len(targets)):
+                top_k_indices = np.argsort(all_predictions[i])[-top_k:]
+
+                if targets[i] in top_k_indices:
+                    correct += 1
+                total += 1
             
-            return correct / total
+            return correct / total if total > 0 else 0.0
+        
+        def _compute_mean_per_class_accuracy(all_predictions, targets):
+            class_correct = {}
+            class_total = {}
+
+            for i in range(len(targets)):
+                label = targets[i]
+                pred = all_predictions[i].argmax()
+
+                if label not in class_correct:
+                    class_correct[label] = 0
+                    class_total[label] = 0
+                
+                if pred == label:
+                    class_correct[label] += 1
+                class_total[label] += 1
+
+            return sum(class_correct[label] / class_total[label] for label in class_correct) / len(class_correct)
 
         output_path = None
         match self.operation:
-            case "train_encoder": output_path = self.train_encoder_output_path
             case "linear_evaluation": output_path = self.linear_evaluation_output_path
             case "transfer_learning": output_path = self.transfer_learning_output_path
+            case _: assert False, f"Operation {self.operation} does not save results."
 
-        top_5_accuracy = _compute_accuracy(top_5_predictions, targets, is_top_k=True)
-        top_1_accuracy = _compute_accuracy(top_1_predictions, targets)
+        top_5_accuracy = _compute_top_accuracy(all_predictions, targets, top_k=5)
+        top_1_accuracy = _compute_top_accuracy(all_predictions, targets, top_k=1)
+        mean_per_class_accuracy = _compute_mean_per_class_accuracy(all_predictions, targets)
 
-        with open(os.path.join(output_path, "results.json"), "w") as f:
+        with open(os.path.join(output_path, f"results_{str(self.label_fraction)}.json"), "w") as f:
             json.dump({
                 "top_5_accuracy": top_5_accuracy,
-                "top_1_accuracy": top_1_accuracy
-            }, f)
+                "top_1_accuracy": top_1_accuracy,
+                "mean_per_class_accuracy": mean_per_class_accuracy,
+            }, f, indent=4)
 
     def _load_normalization(self):
         normalization_json_path = f"{self.train_encoder_output_path}{self.execution_name}/train_encoder/normalization.json"
