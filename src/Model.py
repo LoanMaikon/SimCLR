@@ -508,7 +508,7 @@ class Model():
 
         dataloader = torch.utils.data.DataLoader(
             dataset,
-            batch_size=self.train_encoder_batch_size,
+            batch_size=self.train_encoder_chunk_size, # Using chunk size
             num_workers=self.train_encoder_num_workers,
             pin_memory=True if self.device.type == 'cuda' else False
         )
