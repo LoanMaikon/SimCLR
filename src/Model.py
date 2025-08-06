@@ -244,21 +244,23 @@ class Model():
             pin_memory=True if self.device.type == 'cuda' else False
         )
 
-        val_dataset = custom_dataset(
-            operation="val",
-            apply_data_augmentation=False,
-            datasets=self.linear_evaluation_train_datasets,
-            datasets_folder_path=self.train_encoder_datasets_path,
-            transform=self.linear_evaluation_transform_val_test,
-        )
+        self.val_dataloader = None
+        if self.has_validation_set(): # Datasets other than ImageNet
+            val_dataset = custom_dataset(
+                operation="val",
+                apply_data_augmentation=False,
+                datasets=self.linear_evaluation_train_datasets,
+                datasets_folder_path=self.train_encoder_datasets_path,
+                transform=self.linear_evaluation_transform_val_test,
+            )
 
-        self.val_dataloader = torch.utils.data.DataLoader(
-            dataset=val_dataset,
-            batch_size=self.linear_evaluation_batch_size,
-            num_workers=self.train_encoder_num_workers,
-            shuffle=False,
-            pin_memory=True if self.device.type == 'cuda' else False
-        )
+            self.val_dataloader = torch.utils.data.DataLoader(
+                dataset=val_dataset,
+                batch_size=self.linear_evaluation_batch_size,
+                num_workers=self.train_encoder_num_workers,
+                shuffle=False,
+                pin_memory=True if self.device.type == 'cuda' else False
+            )
 
         test_dataset = custom_dataset(
             operation="test",
@@ -290,22 +292,6 @@ class Model():
             batch_size=self.train_encoder_batch_size,
             num_workers=self.train_encoder_num_workers,
             shuffle=True,
-            pin_memory=True if self.device.type == 'cuda' else False
-        )
-
-        val_dataset = custom_dataset(
-            operation="val",
-            apply_data_augmentation=True,
-            datasets=self.train_encoder_train_datasets,
-            datasets_folder_path=self.train_encoder_datasets_path,
-            transform=self.transform
-        )
-
-        self.val_dataloader = torch.utils.data.DataLoader(
-            dataset=val_dataset,
-            batch_size=self.train_encoder_batch_size,
-            num_workers=self.train_encoder_num_workers,
-            shuffle=False,
             pin_memory=True if self.device.type == 'cuda' else False
         )
 
