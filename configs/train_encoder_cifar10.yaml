@@ -4,7 +4,7 @@ train_datasets: [cifar10]
 batch_size: 4096 # Paper uses 4096
 chunk_size: 128 # Number of samples to infer at the same time (divide batch size)
 num_epochs: 100 # The paper uses 100 epochs
-num_workers: 64
+num_workers: 20
 model: resnet50
 transform_resize: [224, 224]
 projection_head_mode: non-linear # linear, non-linear or none
