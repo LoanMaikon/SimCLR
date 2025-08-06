@@ -186,10 +186,10 @@ class Model():
         self.optimizer = optim.SGD(self.model.parameters(), lr=0.1 * self.linear_evaluation_batch_size / 256, momentum=0.9, weight_decay=0.0)
 
     '''
-    The SimCLR defines lr = 0.3 * batch_size / 256. But in section B.1., it says that for small batch sizes like ours, the bert lr is 0.075 * sqrt(batch_size)
+    The SimCLR defines lr = 0.3 * batch_size / 256 (B.6.)
     '''
     def _load_train_encoder_optimizer(self):
-        self.optimizer = optim.SGD(self.model.parameters(), lr=0.075 * np.sqrt(self.train_encoder_batch_size), momentum=0.9, weight_decay=0.0)
+        self.optimizer = optim.SGD(self.model.parameters(), lr=0.3 * self.train_encoder_batch_size / 256, momentum=0.9, weight_decay=0.0)
 
         # Still have to make LARS
 

@@ -1,8 +1,8 @@
 output_path: /disk0/lmk22/simclr_output/train_encoder_imagenet
 datasets_path: /disk0/lmk22/datasets
 train_datasets: [imagenet]
-batch_size: 1024 # Batch size to process at the same time since we can't use 4096 in one GPU
-chunk_size: 128 # Number of samples to infer at the same time
+batch_size: 4096 # Paper uses 4096
+chunk_size: 128 # Number of samples to infer at the same time (divide batch size)
 num_epochs: 100 # The paper uses 100 epochs
 num_workers: 64
 model: resnet50
