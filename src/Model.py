@@ -186,10 +186,10 @@ class Model():
         self.optimizer = optim.SGD(self.model.parameters(), lr=0.1 * self.linear_evaluation_batch_size / 256, momentum=0.9, weight_decay=0.0)
 
     '''
-    The SimCLR defines lr = 0.3 * batch_size / 256 (B.6.)
+    The SimCLR defines lr = 0.3 * batch_size / 256 and weight decay of 1e-6 (B.6.)
     '''
     def _load_train_encoder_optimizer(self):
-        self.optimizer = optim.SGD(self.model.parameters(), lr=0.3 * self.train_encoder_batch_size / 256, momentum=0.9, weight_decay=0.0)
+        self.optimizer = optim.SGD(self.model.parameters(), lr=0.3 * self.train_encoder_batch_size / 256, momentum=0.9, weight_decay=1e-6)
 
         # Still have to make LARS
 
