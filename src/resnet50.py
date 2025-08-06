@@ -60,14 +60,26 @@ class resnet50(nn.Module):
         for param in self.backbone.fc.parameters():
             param.requires_grad = True
 
+    def unfreeze_encoder(self):
+        for param in self.backbone.parameters():
+            param.requires_grad = True
+        for param in self.backbone.fc.parameters():
+            param.requires_grad = True
+
     def fit_projection_head(self):
         self.backbone.fc = self.projection_head
+
+        for param in self.backbone.fc.parameters():
+            param.requires_grad = True
     
     def remove_projection_head(self):
         self.backbone.fc = nn.Identity()
 
     def fit_classifier_head(self, num_classes):
         self.backbone.fc = nn.Linear(self.encoder_out_features, num_classes, bias=True)
+
+        for param in self.backbone.fc.parameters():
+            param.requires_grad = True
 
     def forward(self, x1, x2=None):
         def _forward_chunk(x):
@@ -88,74 +100,3 @@ class resnet50(nn.Module):
             return self.backbone.fc(x1_out), self.backbone.fc(x2_out)
         
         return self.backbone.fc(x1_out)
-
-    # def forward(self, x1, x2=None):
-    #     def process_input(x):
-    #         def first_layers(x):
-    #             x = self.backbone.conv1(x)
-    #             x = self.backbone.bn1(x)
-    #             x = self.backbone.relu(x)
-    #             x = self.backbone.maxpool(x)
-
-    #             return x
-            
-    #         def layer1(x):
-    #             return self.backbone.layer1(x)
-                
-    #         def layer2(x):
-    #             return self.backbone.layer2(x)
-                
-    #         def layer3(x):
-    #             return self.backbone.layer3(x)
-                
-    #         def layer4(x):
-    #             return self.backbone.layer4(x)
-                
-    #         def pool(x):
-    #             x = self.backbone.avgpool(x)
-    #             x = torch.flatten(x, 1)
-    #             return x
-                
-    #         x = torch.utils.checkpoint.checkpoint(first_layers, x, use_reentrant=False, preserve_rng_state=False)
-    #         torch.cuda.empty_cache()
-    #         x = torch.utils.checkpoint.checkpoint(layer1, x, use_reentrant=False, preserve_rng_state=False)
-    #         torch.cuda.empty_cache()
-    #         x = torch.utils.checkpoint.checkpoint(layer2, x, use_reentrant=False, preserve_rng_state=False)
-    #         torch.cuda.empty_cache()
-    #         x = torch.utils.checkpoint.checkpoint(layer3, x, use_reentrant=False, preserve_rng_state=False)
-    #         torch.cuda.empty_cache()
-    #         x = torch.utils.checkpoint.checkpoint(layer4, x, use_reentrant=False, preserve_rng_state=False)
-    #         torch.cuda.empty_cache()
-    #         x = torch.utils.checkpoint.checkpoint(pool, x, use_reentrant=False, preserve_rng_state=False)
-    #         torch.cuda.empty_cache()
-            
-    #         return x
-
-    #     x1 = self.backbone.fc(process_input(x1))
-
-    #     torch.cuda.empty_cache()
-
-    #     if x2 is not None:
-    #         x2 = self.backbone.fc(process_input(x2))
-
-    #         torch.cuda.empty_cache()
-
-    #         return x1, x2
-        
-    #     return x1
-
-    # def forward(self, x1, x2=None):
-    #     modules = list(self.backbone.children())[:-1]
-    #     chunks = 16
-
-    #     x1_feat = torch.utils.checkpoint.checkpoint_sequential(modules, chunks, x1).flatten(1)
-    #     out1 = self.backbone.fc(x1_feat)
-    #     torch.cuda.empty_cache()
-
-    #     if x2 is not None:
-    #         x2_feat = torch.utils.checkpoint.checkpoint_sequential(modules, chunks, x2).flatten(1)
-    #         out2 = self.backbone.fc(x2_feat)
-    #         torch.cuda.empty_cache()
-
-    #         return out1, out2
-    #     return out1

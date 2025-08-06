@@ -1,4 +1,0 @@
-encoder_config: configs/train_encoder_cifar10.yaml
-train_datasets: [cifar100]
-batch_size: 256 # Batch size to process at the same time since we can't use 4096 in one GPU
-num_epochs: 90 # The paper uses 90 epochs

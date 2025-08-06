@@ -79,7 +79,30 @@ class Model():
                 self._load_linear_evaluation_criterion()
                 self._load_linear_evaluation_optimizer()
 
-       # ...
+            case "transfer_learning":
+                self._load_transfer_learning_config(config_path)
+                self._load_train_encoder_config(self.transfer_learning_encoder_config_path)
+
+                self._create_transfer_learning_output_path()
+
+                self._load_backbone()
+                self._load_encoder_weight()
+                self._fit_classifier_head()
+                self._unfreeze_encoder()
+
+                self._load_normalization() # Load mean and std from JSON
+
+                self._load_transfer_learning_transform()
+                self._load_transfer_learning_dataloaders()
+
+                self._load_transfer_learning_criterion()
+                self._load_transfer_learning_optimizer()
+
+    def get_transfer_learning_num_epochs(self):
+        return self.transfer_learning_num_epochs
+
+    def set_transfer_learning_num_epochs(self, num_epochs):
+        self.transfer_learning_num_epochs = num_epochs
 
     def get_linear_evaluation_train_datasets(self):
         return self.linear_evaluation_train_datasets
@@ -130,6 +153,9 @@ class Model():
     def get_optimizer(self):
         return self.optimizer
     
+    def _load_transfer_learning_criterion(self):
+        self.criterion = nn.CrossEntropyLoss()
+    
     def _load_linear_evaluation_criterion(self):
         self.criterion = nn.CrossEntropyLoss()
     
@@ -147,6 +173,12 @@ class Model():
         self.scheduler = torch.optim.lr_scheduler.LambdaLR(self.optimizer, lr_lambda=__lr_lambda)
 
     '''
+    The SimCLR defines lr = 0.05 * batch_size / 256 (B.5.)
+    '''
+    def _load_transfer_learning_optimizer(self):
+        self.optimizer = optim.SGD(self.model.parameters(), lr=0.05 * self.transfer_learning_batch_size / 256, momentum=0.9, weight_decay=0.0)
+
+    '''
     The SimCLR defines lr = 0.1 * batch_size / 256 (B.6.)
     It also uses SGD with momentum 0.9, no use of weight decay and a warmup
     '''
@@ -154,10 +186,10 @@ class Model():
         self.optimizer = optim.SGD(self.model.parameters(), lr=0.1 * self.linear_evaluation_batch_size / 256, momentum=0.9, weight_decay=0.0)
 
     '''
-    The SimCLR defines lr = 0.3 * batch_size / 256
+    The SimCLR defines lr = 0.3 * batch_size / 256. But in section B.1., it says that for small batch sizes like ours, the bert lr is 0.075 * sqrt(batch_size)
     '''
     def _load_train_encoder_optimizer(self):
-        self.optimizer = optim.SGD(self.model.parameters(), lr=0.3 * self.train_encoder_batch_size / 256, momentum=0.9, weight_decay=0.0)
+        self.optimizer = optim.SGD(self.model.parameters(), lr=0.075 * np.sqrt(self.train_encoder_batch_size), momentum=0.9, weight_decay=0.0)
 
         # Still have to make LARS
 
@@ -170,10 +202,12 @@ class Model():
             case "linear_evaluation":
                 models_path = self.linear_evaluation_output_path + "models"
                 os.makedirs(models_path, exist_ok=True)
-                torch.save(self.model.state_dict(), os.path.join(models_path, f"model_{str(self.label_fraction * 100)}.pth"))
-            
+                torch.save(self.model.state_dict(), os.path.join(models_path, f"model_{str(int(self.label_fraction * 100))}.pth"))
+
             case "transfer_learning":
-                pass
+                models_path = self.transfer_learning_output_path + "/models"
+                os.makedirs(models_path, exist_ok=True)
+                torch.save(self.model.state_dict(), os.path.join(models_path, f"model_{str(int(self.label_fraction * 100))}.pth"))
 
     def get_train_dataloader(self):
         return self.train_dataloader
@@ -225,6 +259,58 @@ class Model():
 
     def model_to_eval(self):
         self.model.eval()
+
+    def _load_transfer_learning_dataloaders(self):
+        train_dataset = custom_dataset(
+            operation="train",
+            apply_data_augmentation=False,
+            datasets=self.transfer_learning_train_datasets,
+            datasets_folder_path=self.train_encoder_datasets_path,
+            transform=self.transfer_learning_transform_train,
+            label_fraction=self.label_fraction
+        )
+
+        self.train_dataloader = torch.utils.data.DataLoader(
+            dataset=train_dataset,
+            batch_size=self.transfer_learning_batch_size,
+            num_workers=self.train_encoder_num_workers,
+            shuffle=True,
+            pin_memory=True if self.device.type == 'cuda' else False
+        )
+
+        self.val_dataloader = None
+        if self.has_validation_set():
+            val_dataset = custom_dataset(
+                operation="val",
+                apply_data_augmentation=False,
+                datasets=self.transfer_learning_train_datasets,
+                datasets_folder_path=self.train_encoder_datasets_path,
+                transform=self.transfer_learning_transform_val_test,
+            )
+
+            self.val_dataloader = torch.utils.data.DataLoader(
+                dataset=val_dataset,
+                batch_size=self.transfer_learning_batch_size,
+                num_workers=self.train_encoder_num_workers,
+                shuffle=False,
+                pin_memory=True if self.device.type == 'cuda' else False
+            )
+        
+        test_dataset = custom_dataset(
+            operation="test",
+            apply_data_augmentation=False,
+            datasets=self.transfer_learning_train_datasets,
+            datasets_folder_path=self.train_encoder_datasets_path,
+            transform=self.transfer_learning_transform_val_test
+        )
+
+        self.test_dataloader = torch.utils.data.DataLoader(
+            dataset=test_dataset,
+            batch_size=self.transfer_learning_batch_size,
+            num_workers=self.train_encoder_num_workers,
+            shuffle=False,
+            pin_memory=True if self.device.type == 'cuda' else False
+        )
 
     def _load_linear_evaluation_dataloaders(self):
         train_dataset = custom_dataset(
@@ -314,9 +400,22 @@ class Model():
             v2.Normalize(mean=self.mean, std=self.std)
         ])
 
+    def _load_transfer_learning_transform(self):
+        self.transfer_learning_transform_train = v2.Compose([
+            v2.Resize(self.train_encoder_transform_resize),
+            v2.Normalize(mean=self.mean, std=self.std)
+        ])
+
+        self.transfer_learning_transform_val_test = v2.Compose([
+            v2.Resize(self.train_encoder_transform_resize),
+            v2.ToImage(),
+            v2.ToDtype(torch.float32, scale=True),
+            v2.Normalize(mean=self.mean, std=self.std)
+        ])
+
     def _load_linear_evaluation_transform(self):
         self.linear_evaluation_transform_train = v2.Compose([
-            v2.RandomResizedCrop(self.train_encoder_transform_resize), # SimCLR B.6.
+            v2.Resize(self.train_encoder_transform_resize),
             v2.RandomHorizontalFlip(0.5) , # SimCLR B.6.
             v2.ToImage(),
             v2.ToDtype(torch.float32, scale=True),
@@ -473,6 +572,9 @@ class Model():
     def _freeze_encoder(self):
         self.model.freeze_encoder()
 
+    def _unfreeze_encoder(self):
+        self.model.unfreeze_encoder()
+
     def _fit_classifier_head(self):
         self.model.fit_classifier_head(num_classes=NUM_CLASSES[self.linear_evaluation_train_datasets[0]])
 
@@ -481,6 +583,15 @@ class Model():
     
     def _remove_projection_head(self):
         self.model.remove_projection_head()
+
+    def _create_transfer_learning_output_path(self):
+        datasets_str = "_".join(self.transfer_learning_train_datasets)
+
+        self.transfer_learning_output_path = self.train_encoder_output_path + f"{self.execution_name}/transfer_learning_{datasets_str}_labels{str(self.label_fraction * 100)}"
+
+        os.makedirs(self.transfer_learning_output_path, exist_ok=True)
+        shutil.copyfile(self.transfer_learning_encoder_config_path, os.path.join(self.transfer_learning_output_path, "encoder_config.yaml"))
+        shutil.copyfile(self.transfer_learning_config_path, os.path.join(self.transfer_learning_output_path, "config.yaml"))
 
     def _create_linear_evaluation_output_path(self):
         datasets_str = "_".join(self.linear_evaluation_train_datasets)
@@ -506,6 +617,14 @@ class Model():
 
         os.makedirs(self.train_encoder_output_path, exist_ok=True)
         shutil.copyfile(config_path, os.path.join(self.train_encoder_output_path, "config.yaml"))
+
+    def _load_transfer_learning_config(self, config_path):
+        config = yaml.safe_load(open(config_path, 'r'))
+
+        self.transfer_learning_train_datasets = config['train_datasets']
+        self.transfer_learning_batch_size = config['batch_size']
+        self.transfer_learning_encoder_config_path = config['encoder_config']
+        self.transfer_learning_config_path = config_path
 
     def _load_linear_evaluation_config(self, config_path):
         config = yaml.safe_load(open(config_path, 'r'))
