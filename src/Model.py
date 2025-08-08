@@ -50,6 +50,8 @@ class Model():
                 self._load_backbone()
                 self._fit_projection_head()
 
+                self.model.to(self.device)
+
                 self._compute_normalization() # Calculating mean and std
                 self._save_normalization() # Save on JSON
 
@@ -71,6 +73,8 @@ class Model():
                 self._fit_classifier_head()
                 self._freeze_encoder()
 
+                self.model.to(self.device)
+
                 self._load_normalization() # Load mean and std from JSON
 
                 self._load_linear_evaluation_transform()
@@ -89,6 +93,8 @@ class Model():
                 self._load_encoder_weight()
                 self._fit_classifier_head()
                 self._unfreeze_encoder()
+
+                self.model.to(self.device)
 
                 self._load_normalization() # Load mean and std from JSON
 
