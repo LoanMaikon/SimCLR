@@ -593,7 +593,7 @@ class Model():
     def _create_transfer_learning_output_path(self):
         datasets_str = "_".join(self.transfer_learning_train_datasets)
 
-        self.transfer_learning_output_path = self.train_encoder_output_path + f"{self.execution_name}/transfer_learning_{datasets_str}_labels{str(self.label_fraction * 100)}"
+        self.transfer_learning_output_path = self.train_encoder_output_path + f"{self.execution_name}/transfer_learning_{datasets_str}/"
 
         os.makedirs(self.transfer_learning_output_path, exist_ok=True)
         shutil.copyfile(self.transfer_learning_encoder_config_path, os.path.join(self.transfer_learning_output_path, "encoder_config.yaml"))
@@ -602,7 +602,7 @@ class Model():
     def _create_linear_evaluation_output_path(self):
         datasets_str = "_".join(self.linear_evaluation_train_datasets)
 
-        self.linear_evaluation_output_path = self.train_encoder_output_path + f"{self.execution_name}/linear_evaluation_{datasets_str}"
+        self.linear_evaluation_output_path = self.train_encoder_output_path + f"{self.execution_name}/linear_evaluation_{datasets_str}/"
 
         os.makedirs(self.linear_evaluation_output_path, exist_ok=True)
         shutil.copyfile(self.linear_evaluation_encoder_config_path, os.path.join(self.linear_evaluation_output_path, "encoder_config.yaml"))
