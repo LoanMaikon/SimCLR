@@ -588,7 +588,7 @@ class Model():
             case "linear_evaluation": train_dataset = self.linear_evaluation_train_datasets[0]
             case "transfer_learning": train_dataset = self.transfer_learning_train_datasets[0]
 
-        self.model.fit_classifier_head(num_classes=NUM_CLASSES[train_dataset]])
+        self.model.fit_classifier_head(num_classes=NUM_CLASSES[train_dataset])
 
     def _fit_projection_head(self):
         self.model.fit_projection_head()
