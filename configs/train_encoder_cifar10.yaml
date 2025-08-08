@@ -2,9 +2,10 @@ output_path: /disk0/lmk22/simclr_output/train_encoder_cifar10
 datasets_path: /disk0/lmk22/datasets
 train_datasets: [cifar10]
 batch_size: 4096 # Paper uses 4096
-chunk_size: 512 # Number of samples to infer at the same time (divide batch size)
+chunk_size: 1024 # Number of samples to infer at the same time (divide batch size)
 num_epochs: 100 # The paper uses 100 epochs
 num_workers: 26
+prefetch_factor: 2
 model: resnet50
 transform_resize: [224, 224]
 projection_head_mode: non-linear # linear, non-linear or none

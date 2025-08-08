@@ -110,6 +110,8 @@ def test(model):
         all_predictions=all_predictions,
     )
 
+    model.write_on_log(f"Testing completed\n")
+
 def get_executions_names(config):
     linear_evaluation_config = yaml.safe_load(open(config, 'r'))
     train_encoder_config = linear_evaluation_config['encoder_config']

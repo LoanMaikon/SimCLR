@@ -28,6 +28,7 @@ def train(model):
     scaler = torch.amp.GradScaler('cuda' if model.get_gpu_index() is not None else 'cpu')
 
     best_train_loss = float('inf')
+    best_val_loss = float('inf')
     for epoch in range(model.get_train_encoder_num_epochs()):
         model.write_on_log(f"Epoch {epoch + 1}/{model.get_train_encoder_num_epochs()}")
 
@@ -56,10 +57,29 @@ def train(model):
         epoch_train_loss /= len(model.get_train_dataloader())
         model.write_on_log(f"Training loss: {epoch_train_loss:.4f}")
 
-        if epoch_train_loss < best_train_loss:
-            model.write_on_log(f"Training loss improved from {best_train_loss:.4f} to {epoch_train_loss:.4f}. Saving model...")
-            best_train_loss = epoch_train_loss
-            model.save_model()
+        if model.has_validation_set(): # Datasets other than ImageNet
+            model.model_to_eval()
+
+            val_loss = 0.0
+            with torch.no_grad():
+                for batch in model.get_validation_dataloader():
+                    z1, z2 = model.model_infer(batch[0], batch[1])
+                    loss = model.apply_criterion(z1, z2)
+                    val_loss += loss.item()
+
+            val_loss /= len(model.get_validation_dataloader())
+            model.write_on_log(f"Validation loss: {val_loss:.4f}")
+
+            if val_loss < best_val_loss:
+                model.write_on_log(f"Validation loss improved from {best_val_loss:.4f} to {val_loss:.4f}. Saving model...")
+                best_val_loss = val_loss
+                model.save_model()
+
+        else: # We use ImageNet validation set as a test set following proposed protocol
+            if epoch_train_loss < best_train_loss:
+                model.write_on_log(f"Training loss improved from {best_train_loss:.4f} to {epoch_train_loss:.4f}. Saving model...")
+                best_train_loss = epoch_train_loss
+                model.save_model()
         
         model.get_scheduler().step()
 

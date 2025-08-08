@@ -19,8 +19,8 @@ class resnet50(nn.Module):
         self.projection_head_mode = projection_head_mode
         self.projection_dim = projection_dim
 
-        # self.backbone = models.resnet50(weights=None) # Training from scratch
-        self.backbone = models.resnet50(weights=models.ResNet50_Weights.IMAGENET1K_V2)
+        self.backbone = models.resnet50(weights=None) # Training from scratch (recommended)
+        #self.backbone = models.resnet50(weights=models.ResNet50_Weights.IMAGENET1K_V2) # Using pretrained weights
 
         self.projection_head = None
         self.encoder_out_features = self.backbone.fc.in_features

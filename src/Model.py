@@ -281,7 +281,8 @@ class Model():
             batch_size=self.transfer_learning_batch_size,
             num_workers=self.train_encoder_num_workers,
             shuffle=True,
-            pin_memory=True if self.device.type == 'cuda' else False
+            pin_memory=True if self.device.type == 'cuda' else False,
+            prefetch_factor=self.train_encoder_prefetch_factor,
         )
 
         self.val_dataloader = None
@@ -299,7 +300,8 @@ class Model():
                 batch_size=self.transfer_learning_batch_size,
                 num_workers=self.train_encoder_num_workers,
                 shuffle=False,
-                pin_memory=True if self.device.type == 'cuda' else False
+                pin_memory=True if self.device.type == 'cuda' else False,
+                prefetch_factor=self.train_encoder_prefetch_factor,
             )
         
         test_dataset = custom_dataset(
@@ -315,7 +317,8 @@ class Model():
             batch_size=self.transfer_learning_batch_size,
             num_workers=self.train_encoder_num_workers,
             shuffle=False,
-            pin_memory=True if self.device.type == 'cuda' else False
+            pin_memory=True if self.device.type == 'cuda' else False,
+            prefetch_factor=self.train_encoder_prefetch_factor,
         )
 
     def _load_linear_evaluation_dataloaders(self):
@@ -333,7 +336,8 @@ class Model():
             batch_size=self.linear_evaluation_batch_size,
             num_workers=self.train_encoder_num_workers,
             shuffle=True,
-            pin_memory=True if self.device.type == 'cuda' else False
+            pin_memory=True if self.device.type == 'cuda' else False,
+            prefetch_factor=self.train_encoder_prefetch_factor,
         )
 
         self.val_dataloader = None
@@ -351,7 +355,8 @@ class Model():
                 batch_size=self.linear_evaluation_batch_size,
                 num_workers=self.train_encoder_num_workers,
                 shuffle=False,
-                pin_memory=True if self.device.type == 'cuda' else False
+                pin_memory=True if self.device.type == 'cuda' else False,
+                prefetch_factor=self.train_encoder_prefetch_factor,
             )
 
         test_dataset = custom_dataset(
@@ -367,7 +372,8 @@ class Model():
             batch_size=self.linear_evaluation_batch_size,
             num_workers=self.train_encoder_num_workers,
             shuffle=False,
-            pin_memory=True if self.device.type == 'cuda' else False
+            pin_memory=True if self.device.type == 'cuda' else False,
+            prefetch_factor=self.train_encoder_prefetch_factor,
         )
 
     def _load_train_encoder_dataloaders(self):
@@ -384,7 +390,8 @@ class Model():
             batch_size=self.train_encoder_batch_size,
             num_workers=self.train_encoder_num_workers,
             shuffle=True,
-            pin_memory=True if self.device.type == 'cuda' else False
+            pin_memory=True if self.device.type == 'cuda' else False,
+            prefetch_factor=self.train_encoder_prefetch_factor,
         )
 
     def _load_train_encoder_transform(self):
@@ -678,6 +685,7 @@ class Model():
         self.train_encoder_projection_dim = int(config['projection_dim'])
         self.train_encoder_warmup_epochs = int(config['warmup_epochs'])
         self.train_encoder_chunk_size = int(config['chunk_size'])
+        self.train_encoder_prefetch_factor = int(config['prefetch_factor'])
 
     def write_on_log(self, text):
         time = strftime("%Y-%m-%d %H:%M:%S - ", localtime())
