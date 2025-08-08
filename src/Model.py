@@ -409,7 +409,16 @@ class Model():
     def _load_transfer_learning_transform(self):
         self.transfer_learning_transform_train = v2.Compose([
             v2.Resize(self.train_encoder_transform_resize),
-            v2.Normalize(mean=self.mean, std=self.std)
+            v2.ToImage(),
+            v2.ToDtype(torch.float32, scale=True),
+            v2.Normalize(mean=self.mean, std=self.std),
+        ])
+
+        self.transfer_learning_transform_val_test = v2.Compose([
+            v2.Resize(self.train_encoder_transform_resize),
+            v2.ToImage(),
+            v2.ToDtype(torch.float32, scale=True),
+            v2.Normalize(mean=self.mean, std=self.std),
         ])
 
         self.transfer_learning_transform_val_test = v2.Compose([
