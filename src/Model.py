@@ -281,7 +281,7 @@ class Model():
             batch_size=self.transfer_learning_batch_size,
             num_workers=self.train_encoder_num_workers,
             shuffle=True,
-            pin_memory=True if self.device.type == 'cuda' else False,
+            pin_memory=True if self.train_encoder_pin_memory and self.device.type == 'cuda' else False,
             prefetch_factor=self.train_encoder_prefetch_factor,
         )
 
@@ -300,7 +300,7 @@ class Model():
                 batch_size=self.transfer_learning_batch_size,
                 num_workers=self.train_encoder_num_workers,
                 shuffle=False,
-                pin_memory=True if self.device.type == 'cuda' else False,
+                pin_memory=True if self.train_encoder_pin_memory and self.device.type == 'cuda' else False,
                 prefetch_factor=self.train_encoder_prefetch_factor,
             )
         
@@ -317,7 +317,7 @@ class Model():
             batch_size=self.transfer_learning_batch_size,
             num_workers=self.train_encoder_num_workers,
             shuffle=False,
-            pin_memory=True if self.device.type == 'cuda' else False,
+            pin_memory=True if self.train_encoder_pin_memory and self.device.type == 'cuda' else False,
             prefetch_factor=self.train_encoder_prefetch_factor,
         )
 
@@ -336,7 +336,7 @@ class Model():
             batch_size=self.linear_evaluation_batch_size,
             num_workers=self.train_encoder_num_workers,
             shuffle=True,
-            pin_memory=True if self.device.type == 'cuda' else False,
+            pin_memory=True if self.train_encoder_pin_memory and self.device.type == 'cuda' else False,
             prefetch_factor=self.train_encoder_prefetch_factor,
         )
 
@@ -355,7 +355,7 @@ class Model():
                 batch_size=self.linear_evaluation_batch_size,
                 num_workers=self.train_encoder_num_workers,
                 shuffle=False,
-                pin_memory=True if self.device.type == 'cuda' else False,
+                pin_memory=True if self.train_encoder_pin_memory and self.device.type == 'cuda' else False,
                 prefetch_factor=self.train_encoder_prefetch_factor,
             )
 
@@ -372,7 +372,7 @@ class Model():
             batch_size=self.linear_evaluation_batch_size,
             num_workers=self.train_encoder_num_workers,
             shuffle=False,
-            pin_memory=True if self.device.type == 'cuda' else False,
+            pin_memory=True if self.train_encoder_pin_memory and self.device.type == 'cuda' else False,
             prefetch_factor=self.train_encoder_prefetch_factor,
         )
 
@@ -390,7 +390,7 @@ class Model():
             batch_size=self.train_encoder_batch_size,
             num_workers=self.train_encoder_num_workers,
             shuffle=True,
-            pin_memory=True if self.device.type == 'cuda' else False,
+            pin_memory=True if self.train_encoder_pin_memory and self.device.type == 'cuda' else False,
             prefetch_factor=self.train_encoder_prefetch_factor,
         )
 
@@ -532,7 +532,7 @@ class Model():
             dataset,
             batch_size=self.train_encoder_chunk_size, # Using chunk size
             num_workers=self.train_encoder_num_workers,
-            pin_memory=True if self.device.type == 'cuda' else False
+            pin_memory=True if self.train_encoder_pin_memory and self.device.type == 'cuda' else False,
         )
 
         mean = torch.zeros(num_channels, device=self.device)
@@ -579,7 +579,7 @@ class Model():
                 pass
 
             case 'resnet50':
-                self.model = resnet50(self.train_encoder_projection_head_mode, self.train_encoder_projection_dim)
+                self.model = resnet50(self.train_encoder_projection_head_mode, self.train_encoder_projection_dim, self.train_encoder_use_checkpoint)
             
             case 'mobilenet_v3_large':
                 pass
@@ -686,6 +686,8 @@ class Model():
         self.train_encoder_warmup_epochs = int(config['warmup_epochs'])
         self.train_encoder_chunk_size = int(config['chunk_size'])
         self.train_encoder_prefetch_factor = int(config['prefetch_factor'])
+        self.train_encoder_pin_memory = True if config['pin_memory'] == "True" else False
+        self.train_encoder_use_checkpoint = True if config['use_checkpoint'] == "True" else False
 
     def write_on_log(self, text):
         time = strftime("%Y-%m-%d %H:%M:%S - ", localtime())

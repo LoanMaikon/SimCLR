@@ -14,10 +14,11 @@ import os
 from time import strftime, localtime
 
 class resnet50(nn.Module):
-    def __init__(self, projection_head_mode, projection_dim):
+    def __init__(self, projection_head_mode, projection_dim, use_checkpoint):
         super(resnet50, self).__init__()
         self.projection_head_mode = projection_head_mode
         self.projection_dim = projection_dim
+        self.use_checkpoint = use_checkpoint
 
         self.backbone = models.resnet50(weights=None) # Training from scratch (recommended)
         #self.backbone = models.resnet50(weights=models.ResNet50_Weights.IMAGENET1K_V2) # Using pretrained weights
@@ -90,13 +91,29 @@ class resnet50(nn.Module):
 
             return x
         
-        x1_out = torch.utils.checkpoint.checkpoint(_forward_chunk, x1, use_reentrant=False)
-        torch.cuda.empty_cache()
-        
-        if x2 is not None:
-            x2_out = torch.utils.checkpoint.checkpoint(_forward_chunk, x2, use_reentrant=False)
+        if self.use_checkpoint:
+            x1_out = torch.utils.checkpoint.checkpoint(_forward_chunk, x1, use_reentrant=False)
+
             torch.cuda.empty_cache()
             
-            return self.backbone.fc(x1_out), self.backbone.fc(x2_out)
-        
-        return self.backbone.fc(x1_out)
+            if x2 is not None:
+                x2_out = torch.utils.checkpoint.checkpoint(_forward_chunk, x2, use_reentrant=False)
+
+                torch.cuda.empty_cache()
+                
+                return self.backbone.fc(x1_out), self.backbone.fc(x2_out)
+            
+            return self.backbone.fc(x1_out)
+        else:
+            x1_out = self.backbone(x1)
+
+            torch.cuda.empty_cache()
+
+            if x2 is not None:
+                x2_out = self.backbone(x2)
+
+                torch.cuda.empty_cache()
+
+                return x1_out, x2_out
+
+            return x1_out
