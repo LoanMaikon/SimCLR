@@ -7,8 +7,6 @@ from random import shuffle
 import torchvision.transforms as v2
 import scipy.io
 
-# For datasets with no validation set, we use 10% of the training set as validation
-CIFAR_VAL_PERCENT = 0.1
 
 '''
 apply_data_augmentation: if True, the dataset will return two augmented versions of the same image. Else, it will return the original image with preprocessing
@@ -32,9 +30,9 @@ class custom_dataset(Dataset):
 
             match dataset:
                 case 'cifar100' | 'cifar10':
-                    '''
-                    cifar100 and cifar10 don't have a validation set, so we use 10% of each class's training set (last 10% ordered images) as validation
-                    '''
+                    # Don't have a validation set
+                    assert operation in ["train", "test"], "CIFAR datasets only have train and test splits"
+
                     classes = sorted(os.listdir(dataset_path + "train/"))
                     images_per_class = {}
                     for class_idx, _class in enumerate(classes):
@@ -43,17 +41,9 @@ class custom_dataset(Dataset):
                         match self.operation:
                             case "train":
                                 images_per_class[_class].extend(glob(dataset_path + "train/" + _class + "/*.png"))
-                                n_val_images = ceil(len(images_per_class[_class]) * CIFAR_VAL_PERCENT)
                                 images_per_class[_class] = sorted(images_per_class[_class])
-                                images_per_class[_class] = images_per_class[_class][:-n_val_images]
-                            case "val":
-                                images_per_class[_class].extend(glob(dataset_path + "train/" + _class + "/*.png"))
-                                n_val_images = ceil(len(images_per_class[_class]) * CIFAR_VAL_PERCENT)
-                                images_per_class[_class] = sorted(images_per_class[_class])
-                                images_per_class[_class] = images_per_class[_class][-n_val_images:]
                             case "test":
                                 images_per_class[_class].extend(glob(dataset_path + "test/" + _class + "/*.png"))
-
 
                         self.images.extend(images_per_class[_class])
                         self.labels.extend([class_idx] * len(images_per_class[_class]))
@@ -194,6 +184,9 @@ class custom_dataset(Dataset):
                             self.labels.append(class_label)
 
                 case 'food-101':
+                    # Don't have a validation set
+                    assert operation in ["train", "test"], "Food-101 dataset only has train and test splits"
+
                     classes_path = open(f"{dataset_path}food-101/food-101/meta/classes.txt", "r")
                     classes = []
                     for line in classes_path:
@@ -231,23 +224,19 @@ class custom_dataset(Dataset):
                                 train_images.append(image)
                             elif image_to_split.get(image_name) == "test":
                                 test_images.append(image)
-                        
-                        val_images_n = ceil(len(train_images) * 0.1)
-                        val_images = train_images[-val_images_n:]
-                        train_images = train_images[:-val_images_n]
 
                         match self.operation:
                             case "train":
                                 self.images.extend(train_images)
                                 self.labels.extend([class_to_id[_class]] * len(train_images))
-                            case "val":
-                                self.images.extend(val_images)
-                                self.labels.extend([class_to_id[_class]] * len(val_images))
                             case "test":
                                 self.images.extend(test_images)
                                 self.labels.extend([class_to_id[_class]] * len(test_images))
 
                 case 'oxford-pets':
+                    # Don't have a validation set
+                    assert operation in ["train", "test"], "Oxford Pets dataset only has train and test splits"
+
                     test_file = open(f"{dataset_path}oxford-iiit-pet/annotations/test.txt", "r")
                     trainval_file = open(f"{dataset_path}oxford-iiit-pet/annotations/trainval.txt", "r")
 
@@ -299,23 +288,18 @@ class custom_dataset(Dataset):
                             elif image_to_split.get(image_name) == "test":
                                 test_images.append(image)
 
-                        n_val_images = ceil(len(images_per_class[_class]) * 0.1)
-
-                        val_images = train_images[-n_val_images:]
-                        train_images = train_images[:-n_val_images]
-
                         match self.operation:
                             case "train":
                                 self.images.extend(train_images)
                                 self.labels.extend([class_to_id[_class]] * len(train_images))
-                            case "val":
-                                self.images.extend(val_images)
-                                self.labels.extend([class_to_id[_class]] * len(val_images))
                             case "test":
                                 self.images.extend(test_images)
                                 self.labels.extend([class_to_id[_class]] * len(test_images))
 
                 case 'stanford-cars':
+                    # Don't have a validation set
+                    assert operation in ["train", "test"], "Stanford Cars dataset only has train and test splits"
+
                     train_annos = f"{dataset_path}/car_devkit/devkit/cars_train_annos.mat"
                     test_annos = f"{dataset_path}/car_devkit/devkit/cars_test_annos.mat"
                     train_images_path = f"{dataset_path}/cars_train/cars_train"
@@ -362,26 +346,15 @@ class custom_dataset(Dataset):
                             test_images_per_class[class_name] = []
                         test_images_per_class[class_name].append(image)
 
-                    if self.operation == "test":
-                        for _class in test_images_per_class:
-                            self.images.extend(test_images_per_class[_class])
-                            self.labels.extend([int(_class) - 1] * len(test_images_per_class[_class]))
-                    else:
-                        for _class in train_images_per_class:
-                            class_images = train_images_per_class[_class]
-                            class_images = sorted(class_images)
-
-                            n_val_images = ceil(len(class_images) * 0.1)
-                            val_images = class_images[-n_val_images:]
-                            train_images = class_images[:-n_val_images]
-
-                            match self.operation:
-                                case "train":
-                                    self.images.extend(train_images)
-                                    self.labels.extend([int(_class) - 1] * len(train_images))
-                                case "val":
-                                    self.images.extend(val_images)
-                                    self.labels.extend([int(_class) - 1] * len(val_images))
+                    match self.operation:
+                        case "train":
+                            for _class in train_images_per_class:
+                                self.images.extend(train_images_per_class[_class])
+                                self.labels.extend([int(_class) - 1] * len(train_images_per_class[_class]))
+                        case "test":
+                            for _class in test_images_per_class:
+                                self.images.extend(test_images_per_class[_class])
+                                self.labels.extend([int(_class) - 1] * len(test_images_per_class[_class]))
 
                 case 'birdsnap':
                     pass
