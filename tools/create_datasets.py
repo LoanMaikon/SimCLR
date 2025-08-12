@@ -49,6 +49,7 @@ def main():
     _ = DTD(root=output_path + "dtd", download=True)
 
     # Get ImageNet 2012 from the ImageNet website and rename it to imagenet
+    # Get Tiny ImageNet from the ImageNet website and rename it to tiny-imagenet
     # Get Caltech-101 from https://data.caltech.edu/records/mzrjq-6wc02
 
 if __name__ == "__main__":

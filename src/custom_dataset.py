@@ -441,7 +441,32 @@ class custom_dataset(Dataset):
 
                         case "val":
                             raise ValueError("ImageNet has only train and test configs")
-            
+                    
+                case "tiny-imagenet":
+                    # Using val set as test set
+
+                    train_images = glob(f"{dataset_path}train/**/*.JPEG", recursive=True)
+                    class_names = sorted(set(img.split("/")[-3] for img in train_images))
+                    class_to_idx = {cls_name: idx for idx, cls_name in enumerate(class_names)}
+                    labels = [class_to_idx[img.split("/")[-3]] for img in train_images]
+
+                    match self.operation:
+                        case "train":
+                            self.images = train_images
+                            self.labels = labels
+
+                        case "test":
+                            with open(f"{dataset_path}val/val_annotations.txt", "r") as f:
+                                lines = f.readlines()
+
+                            image_name_to_class = {}
+                            for line in lines:
+                                l = line.split("\t")
+                                image_name_to_class[l[0]] = l[1]
+                            
+                            self.images = glob(f"{dataset_path}val/**/*.JPEG", recursive=True)
+                            self.labels = [class_to_idx[image_name_to_class[img.split("/")[-1]]] for img in self.images]
+
         if self.label_fraction is not None:
             self._apply_label_fraction()
     
