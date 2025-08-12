@@ -356,15 +356,36 @@ class custom_dataset(Dataset):
                                 self.images.extend(test_images_per_class[_class])
                                 self.labels.extend([int(_class) - 1] * len(test_images_per_class[_class]))
 
-                case 'birdsnap':
-                    pass
+                case 'caltech-101':
+                    # SimCLR uses 30 images per class for training
+                    images_path = dataset_path + "caltech-101/101_ObjectCategories/"
+                    classes = sorted(os.listdir(images_path))
+                    class_to_id = {cls: idx for idx, cls in enumerate(classes)}
 
-                case 'caltech101':
-                    pass
-
-                case 'caltech256':
-                    pass
+                    images_per_class = {}
+                    for _class in classes:
+                        images_per_class[_class] = sorted(glob(images_path + _class + "/*.jpg"))
                     
+                    train_images = []
+                    train_labels = []
+                    test_images = []
+                    test_labels = []
+                    for _class in images_per_class:
+                        train_images.extend(images_per_class[_class][:30])
+                        test_images.extend(images_per_class[_class][30:])
+                        train_labels.extend([class_to_id[_class]] * 30)
+                        test_labels.extend([class_to_id[_class]] * (len(images_per_class[_class]) - 30))
+
+                    match self.operation:
+                        case "train":
+                            self.images.extend(train_images)
+                            self.labels.extend(train_labels)
+                        case "test":
+                            self.images.extend(test_images)
+                            self.labels.extend(test_labels)
+                        case "val":
+                            raise ValueError("Caltech-101 has only train and test configs")
+
                 case 'imagenet':
                     validation_gd_path = f"{dataset_path}ILSVRC2012_devkit_t12/data/ILSVRC2012_validation_ground_truth.txt"
                     meta_path = f"{dataset_path}ILSVRC2012_devkit_t12/data/meta.mat"
