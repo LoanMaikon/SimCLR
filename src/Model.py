@@ -179,17 +179,24 @@ class Model():
         self.scheduler = torch.optim.lr_scheduler.LambdaLR(self.optimizer, lr_lambda=__lr_lambda)
 
     '''
-    The SimCLR defines lr = 0.05 * batch_size / 256 (B.5.)
+    The SimCLR defines lr = 0.05 * batch_size / 256 (B.5.) for fine tuning on ImageNet
+    It also uses SGD with momentum 0.9, no use of weight decay and a warmup
     '''
     def _load_transfer_learning_optimizer(self):
-        self.optimizer = optim.SGD(self.model.parameters(), lr=0.05 * self.transfer_learning_batch_size / 256, momentum=0.9, weight_decay=0.0)
+        if self.train_encoder_train_datasets[0] == "imagenet" and self.transfer_learning_train_datasets[0] == "imagenet":
+            self.optimizer = optim.SGD(self.model.parameters(), lr=0.05 * self.transfer_learning_batch_size / 256, momentum=0.9, weight_decay=0.0, nesterov=True)
+        else:
+            self.optimizer = optim.SGD(self.model.parameters(), lr=0.001, momentum=0.9, weight_decay=1e-6, nesterov=True)
 
     '''
-    The SimCLR defines lr = 0.1 * batch_size / 256 (B.6.)
+    The SimCLR defines lr = 0.1 * batch_size / 256 (B.6.) for linear evaluation on ImageNet
     It also uses SGD with momentum 0.9, no use of weight decay and a warmup
     '''
     def _load_linear_evaluation_optimizer(self):
-        self.optimizer = optim.SGD(self.model.parameters(), lr=0.1 * self.linear_evaluation_batch_size / 256, momentum=0.9, weight_decay=0.0)
+        if self.train_encoder_train_datasets[0] == "imagenet" and self.linear_evaluation_train_datasets[0] == "imagenet":
+            self.optimizer = optim.SGD(self.model.parameters(), lr=0.1 * self.linear_evaluation_batch_size / 256, momentum=0.9, weight_decay=0.0, nesterov=True)
+        else:
+            self.optimizer = optim.SGD(self.model.parameters(), lr=0.001, momentum=0.9, weight_decay=1e-6, nesterov=True)
 
     '''
     The SimCLR defines lr = 0.3 * batch_size / 256 and weight decay of 1e-6 (B.6.)
@@ -415,7 +422,8 @@ class Model():
 
     def _load_transfer_learning_transform(self):
         self.transfer_learning_transform_train = v2.Compose([
-            v2.Resize(self.train_encoder_transform_resize),
+            v2.RandomResizedCrop(self.train_encoder_transform_resize), # SimCLR B.5.
+            v2.RandomHorizontalFlip(0.5), # SimCLR B.5.
             v2.ToImage(),
             v2.ToDtype(torch.float32, scale=True),
             v2.Normalize(mean=self.mean, std=self.std),
@@ -426,18 +434,11 @@ class Model():
             v2.ToImage(),
             v2.ToDtype(torch.float32, scale=True),
             v2.Normalize(mean=self.mean, std=self.std),
-        ])
-
-        self.transfer_learning_transform_val_test = v2.Compose([
-            v2.Resize(self.train_encoder_transform_resize),
-            v2.ToImage(),
-            v2.ToDtype(torch.float32, scale=True),
-            v2.Normalize(mean=self.mean, std=self.std)
         ])
 
     def _load_linear_evaluation_transform(self):
         self.linear_evaluation_transform_train = v2.Compose([
-            v2.Resize(self.train_encoder_transform_resize),
+            v2.RandomResizedCrop(self.train_encoder_transform_resize), # SimCLR B.6.
             v2.RandomHorizontalFlip(0.5) , # SimCLR B.6.
             v2.ToImage(),
             v2.ToDtype(torch.float32, scale=True),

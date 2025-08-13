@@ -12,15 +12,16 @@ import os
 
 from src.Model import Model
 
-'''
-The propposed approaches use 1%, 10% and 100% of the labels for linear evaluation
-'''
 LABEL_FRACTIONS = [0.01, 0.1, 1.0]
-NUM_EPOCHS = [60, 30, 10] # B.6. Defines the number of epochs for 1%, 10%
 
 def main():
     args = get_args()
     executions_names = get_executions_names(args.config)
+
+    if "imagenet" in _get_train_datasets(args.config):
+        NUM_EPOCHS = [60, 30, 10] # B.6. Defines the number of epochs for 1%, 10%
+    else:
+        NUM_EPOCHS = [500, 250, 100]
 
     for execution_name in executions_names:
         for label_fraction, num_epochs in zip(LABEL_FRACTIONS, NUM_EPOCHS):
@@ -32,8 +33,8 @@ def main():
             test(model)
 
 '''
-Selecting the epoch with the lowest validation loss for datasets other than ImageNet
-For ImageNet, we select the epoch with the lowest training loss
+Selecting the epoch with the lowest validation loss for datasets where it is available.
+For datasets without validation set, the epoch with the lowest training loss is selected.
 '''
 def train(model):
     model.write_on_log(f"Starting training...")
@@ -61,7 +62,7 @@ def train(model):
         epoch_train_loss /= len(model.get_train_dataloader())
         model.write_on_log(f"Training loss: {epoch_train_loss:.4f}")
 
-        if model.has_validation_set(): # Datasets other than ImageNet
+        if model.has_validation_set():
             model.model_to_eval()
 
             epoch_val_loss = 0.0
@@ -81,7 +82,7 @@ def train(model):
                 best_val_loss = epoch_val_loss
                 model.save_model()
 
-        else: # We use ImageNet validation set as a test set following propposed protocol
+        else:
             if epoch_train_loss < best_train_loss:
                 model.write_on_log(f"Training loss improved from {best_train_loss:.4f} to {epoch_train_loss:.4f}. Saving model...")
                 best_train_loss = epoch_train_loss
@@ -113,6 +114,12 @@ def test(model):
     )
 
     model.write_on_log(f"Testing completed\n")
+
+def _get_train_datasets(config):
+    transfer_learning_config = yaml.safe_load(open(config, 'r'))
+    train_datasets = transfer_learning_config['train_datasets']
+
+    return train_datasets
 
 def get_executions_names(config):
     transfer_learning_config = yaml.safe_load(open(config, 'r'))

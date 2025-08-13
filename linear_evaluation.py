@@ -13,9 +13,9 @@ import os
 from src.Model import Model
 
 '''
-The propposed approaches use 1%, 10% and 100% of the labels for linear evaluation
+The propposed approaches use 100% of the labels for linear evaluation
 '''
-LABEL_FRACTIONS = [0.01, 0.1, 1.0]
+LABEL_FRACTIONS = [1.0]
 
 def main():
     args = get_args()
@@ -30,8 +30,8 @@ def main():
             test(model)
 
 '''
-Selecting the epoch with the lowest validation loss for datasets other than ImageNet
-For ImageNet, we select the epoch with the lowest training loss
+Selecting the epoch with the lowest validation loss for datasets where it is available.
+For datasets without validation set, the epoch with the lowest training loss is selected.
 '''
 def train(model):
     model.write_on_log(f"Starting training...")
@@ -79,7 +79,7 @@ def train(model):
                 best_val_loss = epoch_val_loss
                 model.save_model()
 
-        else: # We use ImageNet validation set as a test set following propposed protocol
+        else:
             if epoch_train_loss < best_train_loss:
                 model.write_on_log(f"Training loss improved from {best_train_loss:.4f} to {epoch_train_loss:.4f}. Saving model...")
                 best_train_loss = epoch_train_loss

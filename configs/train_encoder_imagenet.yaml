@@ -4,7 +4,7 @@ train_datasets: [imagenet]
 batch_size: 4096 # Paper uses 4096
 chunk_size: 512 # Number of samples to infer at the same time (divide batch size)
 num_epochs: 100 # The paper uses 100 epochs
-num_workers: 26
+num_workers: 40
 prefetch_factor: 2
 model: resnet50
 transform_resize: [224, 224]
