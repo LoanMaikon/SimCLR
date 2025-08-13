@@ -1,3 +1,5 @@
 encoder_config: configs/train_encoder_imagenet.yaml
 train_datasets: [dtd]
 batch_size: 256
+label_fractions: [0.01, 0.1, 1.0]
+num_epochs: [60, 30, 10]

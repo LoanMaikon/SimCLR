@@ -1,4 +1,5 @@
 encoder_config: configs/train_encoder_imagenet.yaml
 train_datasets: [imagenet]
 batch_size: 4096 # B.6. Defines batch size as 4096
-num_epochs: 90 # B.6. Defines number of epochs as 90
+label_fractions: [1.0]
+num_epochs: [90] # B.6. Defines number of epochs as 90

@@ -104,11 +104,17 @@ class Model():
                 self._load_transfer_learning_criterion()
                 self._load_transfer_learning_optimizer()
 
+    def set_num_epochs(self, num_epochs):
+        match self.operation:
+            case "train_encoder":
+                self.train_encoder_num_epochs = num_epochs
+            case "linear_evaluation":
+                self.linear_evaluation_num_epochs = num_epochs
+            case "transfer_learning":
+                self.transfer_learning_num_epochs = num_epochs
+
     def get_transfer_learning_num_epochs(self):
         return self.transfer_learning_num_epochs
-
-    def set_transfer_learning_num_epochs(self, num_epochs):
-        self.transfer_learning_num_epochs = num_epochs
 
     def get_linear_evaluation_train_datasets(self):
         return self.linear_evaluation_train_datasets
@@ -660,7 +666,6 @@ class Model():
 
         self.linear_evaluation_train_datasets = config['train_datasets']
         self.linear_evaluation_batch_size = config['batch_size']
-        self.linear_evaluation_num_epochs = config['num_epochs']
         self.linear_evaluation_encoder_config_path = config['encoder_config']
         self.linear_evaluation_config_path = config_path
 

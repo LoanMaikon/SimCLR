@@ -1,4 +1,5 @@
 encoder_config: configs/train_encoder_imagenet.yaml
 train_datasets: [oxford-pets]
 batch_size: 256
-num_epochs: 100
+label_fractions: [1.0]
+num_epochs: [90]

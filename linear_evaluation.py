@@ -12,19 +12,20 @@ import os
 
 from src.Model import Model
 
-'''
-The propposed approaches use 100% of the labels for linear evaluation
-'''
-LABEL_FRACTIONS = [1.0]
+LABEL_FRACTIONS = None
+NUM_EPOCHS = None
 
 def main():
     args = get_args()
     executions_names = get_executions_names(args.config)
+    _set_label_fractions_and_num_epochs(args.config)
 
     for execution_name in executions_names:
-        for label_fraction in LABEL_FRACTIONS:
+        for label_fraction, num_epochs in zip(LABEL_FRACTIONS, NUM_EPOCHS):
             model = Model(config_path=args.config, gpu_index=args.gpu, operation="linear_evaluation", execution_name=execution_name, label_fraction=label_fraction)
-            model.write_on_log(f"Label fraction: {label_fraction}\n")
+            model.set_num_epochs(num_epochs)
+
+            model.write_on_log(f"Label fraction: {label_fraction}\nNum epochs: {num_epochs}\n")
 
             train(model)
             test(model)
@@ -111,6 +112,17 @@ def test(model):
     )
 
     model.write_on_log(f"Testing completed\n")
+
+def _set_label_fractions_and_num_epochs(config):
+    linear_evaluation_config = yaml.safe_load(open(config, 'r'))
+    train_encoder_config = linear_evaluation_config['encoder_config']
+    train_encoder_config = yaml.safe_load(open(train_encoder_config, 'r'))
+
+    global LABEL_FRACTIONS, NUM_EPOCHS
+    LABEL_FRACTIONS = train_encoder_config['label_fractions']
+    NUM_EPOCHS = train_encoder_config['num_epochs']
+
+    assert len(LABEL_FRACTIONS) == len(NUM_EPOCHS), "The number of label fractions must match the number of epochs."
 
 def get_executions_names(config):
     linear_evaluation_config = yaml.safe_load(open(config, 'r'))

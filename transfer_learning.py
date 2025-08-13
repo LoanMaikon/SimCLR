@@ -12,22 +12,20 @@ import os
 
 from src.Model import Model
 
-LABEL_FRACTIONS = [0.01, 0.1, 1.0]
+LABEL_FRACTIONS = None
+NUM_EPOCHS = None
 
 def main():
     args = get_args()
     executions_names = get_executions_names(args.config)
-
-    if "imagenet" in _get_train_datasets(args.config):
-        NUM_EPOCHS = [60, 30, 10] # B.6. Defines the number of epochs for 1%, 10%
-    else:
-        NUM_EPOCHS = [500, 250, 100]
+    _set_label_fractions_and_num_epochs(args.config)
 
     for execution_name in executions_names:
         for label_fraction, num_epochs in zip(LABEL_FRACTIONS, NUM_EPOCHS):
             model = Model(config_path=args.config, gpu_index=args.gpu, operation="transfer_learning", execution_name=execution_name, label_fraction=label_fraction)
-            model.set_transfer_learning_num_epochs(num_epochs)
-            model.write_on_log(f"Label fraction: {label_fraction}, Num epochs: {num_epochs}\n")
+            model.set_num_epochs(num_epochs)
+
+            model.write_on_log(f"Label fraction: {label_fraction}\nNum epochs: {num_epochs}\n")
 
             train(model)
             test(model)
@@ -115,11 +113,11 @@ def test(model):
 
     model.write_on_log(f"Testing completed\n")
 
-def _get_train_datasets(config):
+def _set_label_fractions_and_num_epochs(config):
+    global LABEL_FRACTIONS, NUM_EPOCHS
     transfer_learning_config = yaml.safe_load(open(config, 'r'))
-    train_datasets = transfer_learning_config['train_datasets']
-
-    return train_datasets
+    LABEL_FRACTIONS = transfer_learning_config['label_fractions']
+    NUM_EPOCHS = transfer_learning_config['num_epochs']
 
 def get_executions_names(config):
     transfer_learning_config = yaml.safe_load(open(config, 'r'))
