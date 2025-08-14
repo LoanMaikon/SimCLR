@@ -511,19 +511,3 @@ class custom_dataset(Dataset):
         image = self.transform(image)
 
         return image, self.labels[idx]
-
-if __name__ == "__main__":
-    dataset = custom_dataset(
-        operation="test",
-        apply_data_augmentation=False,
-        datasets=['tiny-imagenet'],
-        datasets_folder_path="/home/luan/Desktop/datasets/",
-        transform=v2.Compose([
-            v2.Resize((224, 224)),
-            v2.ToTensor(),
-        ]),
-        label_fraction=None
-        )
-    dataloader = DataLoader(dataset, batch_size=1, shuffle=True)
-
-    print(len(dataloader))

@@ -189,20 +189,14 @@ class Model():
     It also uses SGD with momentum 0.9, no use of weight decay and a warmup
     '''
     def _load_transfer_learning_optimizer(self):
-        if self.train_encoder_train_datasets[0] == "imagenet" and self.transfer_learning_train_datasets[0] == "imagenet":
-            self.optimizer = optim.SGD(self.model.parameters(), lr=0.05 * self.transfer_learning_batch_size / 256, momentum=0.9, weight_decay=0.0, nesterov=True)
-        else:
-            self.optimizer = optim.SGD(self.model.parameters(), lr=0.001, momentum=0.9, weight_decay=1e-6, nesterov=True)
+        self.optimizer = optim.SGD(self.model.parameters(), lr=0.05 * self.transfer_learning_batch_size / 256, momentum=0.9, weight_decay=0.0, nesterov=True)
 
     '''
     The SimCLR defines lr = 0.1 * batch_size / 256 (B.6.) for linear evaluation on ImageNet
     It also uses SGD with momentum 0.9, no use of weight decay and a warmup
     '''
     def _load_linear_evaluation_optimizer(self):
-        if self.train_encoder_train_datasets[0] == "imagenet" and self.linear_evaluation_train_datasets[0] == "imagenet":
-            self.optimizer = optim.SGD(self.model.parameters(), lr=0.1 * self.linear_evaluation_batch_size / 256, momentum=0.9, weight_decay=0.0, nesterov=True)
-        else:
-            self.optimizer = optim.SGD(self.model.parameters(), lr=0.001, momentum=0.9, weight_decay=1e-6, nesterov=True)
+        self.optimizer = optim.SGD(self.model.parameters(), lr=0.1 * self.linear_evaluation_batch_size / 256, momentum=0.9, weight_decay=0.0, nesterov=True)
 
     '''
     The SimCLR defines lr = 0.3 * batch_size / 256 and weight decay of 1e-6 (B.6.)
