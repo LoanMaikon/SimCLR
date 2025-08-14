@@ -57,7 +57,7 @@ def train(model):
         epoch_train_loss /= len(model.get_train_dataloader())
         model.write_on_log(f"Training loss: {epoch_train_loss:.4f}")
 
-        if model.has_validation_set(): # Datasets other than ImageNet
+        if model.has_validation_set():
             model.model_to_eval()
 
             val_loss = 0.0
@@ -75,7 +75,7 @@ def train(model):
                 best_val_loss = val_loss
                 model.save_model()
 
-        else: # We use ImageNet validation set as a test set following proposed protocol
+        else:
             if epoch_train_loss < best_train_loss:
                 model.write_on_log(f"Training loss improved from {best_train_loss:.4f} to {epoch_train_loss:.4f}. Saving model...")
                 best_train_loss = epoch_train_loss

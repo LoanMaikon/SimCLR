@@ -151,8 +151,9 @@ class Model():
             case "transfer_learning":
                 set = self.transfer_learning_train_datasets
         
-        if "imagenet" in set:
-            return False
+        for s in set:
+            if s in ['imagenet', 'tiny-imagenet', 'caltech-101', 'cifar10', 'cifar100', 'food-101', 'stanford-cars']:
+                return False
         return True
 
     
