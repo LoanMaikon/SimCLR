@@ -115,12 +115,10 @@ def test(model):
 
 def _set_label_fractions_and_num_epochs(config):
     linear_evaluation_config = yaml.safe_load(open(config, 'r'))
-    train_encoder_config = linear_evaluation_config['encoder_config']
-    train_encoder_config = yaml.safe_load(open(train_encoder_config, 'r'))
 
     global LABEL_FRACTIONS, NUM_EPOCHS
-    LABEL_FRACTIONS = train_encoder_config['label_fractions']
-    NUM_EPOCHS = train_encoder_config['num_epochs']
+    LABEL_FRACTIONS = linear_evaluation_config['label_fractions']
+    NUM_EPOCHS = linear_evaluation_config['num_epochs']
 
     assert len(LABEL_FRACTIONS) == len(NUM_EPOCHS), "The number of label fractions must match the number of epochs."
 
