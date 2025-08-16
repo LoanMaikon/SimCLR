@@ -37,6 +37,8 @@ For datasets without validation set, the epoch with the lowest training loss is 
 def train(model):
     model.write_on_log(f"Starting training...")
 
+    scaler = torch.amp.GradScaler('cuda' if model.get_gpu_index() is not None else 'cpu')
+
     best_val_loss = float('inf')
     best_train_loss = float('inf')
     for epoch in range(model.get_linear_evaluation_num_epochs()):
@@ -48,14 +50,19 @@ def train(model):
         for batch in model.get_train_dataloader():
             model.get_optimizer().zero_grad()
 
-            z1 = model.model_infer(batch[0])
-            targets = batch[1].to(model.get_device())
+            with torch.amp.autocast('cuda' if model.get_gpu_index() is not None else 'cpu'):
+                z1 = model.model_infer(batch[0])
+                targets = batch[1].to(model.get_device())
 
-            loss = model.apply_criterion(z1, targets)
-            loss.backward()
+                loss = model.apply_criterion(z1, targets)
+
+            scaler.scale(loss).backward()
+            scaler.step(model.get_optimizer())
+            scaler.update()
+
             epoch_train_loss += loss.item()
 
-            model.get_optimizer().step()
+            torch.cuda.empty_cache()
 
         epoch_train_loss /= len(model.get_train_dataloader())
         model.write_on_log(f"Training loss: {epoch_train_loss:.4f}")
@@ -66,10 +73,11 @@ def train(model):
             epoch_val_loss = 0.0
             with torch.no_grad():
                 for batch in model.get_val_dataloader():
-                    z1 = model.model_infer(batch[0])
-                    targets = batch[1].to(model.get_device())
+                    with torch.amp.autocast('cuda' if model.get_gpu_index() is not None else 'cpu'):
+                        z1 = model.model_infer(batch[0])
+                        targets = batch[1].to(model.get_device())
 
-                    loss = model.apply_criterion(z1, targets)
+                        loss = model.apply_criterion(z1, targets)
                     epoch_val_loss += loss.item()
             
             epoch_val_loss /= len(model.get_val_dataloader())
