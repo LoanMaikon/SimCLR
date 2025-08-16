@@ -152,7 +152,7 @@ class Model():
                 set = self.transfer_learning_train_datasets
         
         for s in set:
-            if s in ['imagenet', 'tiny-imagenet', 'caltech-101', 'cifar10', 'cifar100', 'food-101', 'stanford-cars']:
+            if s in ['imagenet', 'tiny-imagenet', 'caltech-101', 'cifar10', 'cifar100', 'food-101', 'stanford-cars', 'oxford-pets']:
                 return False
         return True
 
