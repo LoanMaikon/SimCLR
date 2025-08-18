@@ -25,7 +25,9 @@ NUM_CLASSES = {
     'flowers-102': 102,
     'food-101': 101,
     'oxford-pets': 37,
-    'stanford-cars': 196
+    'stanford-cars': 196,
+    'tiny-imagenet': 200,
+    'caltech-101': 101,
 }
 
 '''
