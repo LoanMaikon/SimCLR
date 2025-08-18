@@ -196,7 +196,6 @@ class Model():
     '''
     The SimCLR defines lr = 0.05 * batch_size / 256 (B.5.) for fine tuning on ImageNet
     It also uses SGD with momentum 0.9, no use of weight decay and a warmup
-    Using lr = 0.5
     '''
     def _load_transfer_learning_optimizer(self):
         self.optimizer = optim.SGD(self.model.parameters(), lr=0.05 * self.transfer_learning_batch_size / 256, momentum=0.9, weight_decay=0.0, nesterov=True)
