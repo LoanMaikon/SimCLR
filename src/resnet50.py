@@ -21,6 +21,8 @@ class resnet50(nn.Module):
         self.use_checkpoint = use_checkpoint
 
         self.backbone = models.resnet50(weights=None) # Training from scratch (recommended)
+        self.backbone = self.replace_bn_with_gn(self.backbone, num_groups=32) # Replacing BatchNorm with GroupNorm
+
         #self.backbone = models.resnet50(weights=models.ResNet50_Weights.IMAGENET1K_V2) # Using pretrained weights
 
         self.projection_head = None
@@ -54,6 +56,23 @@ class resnet50(nn.Module):
         
         if self.projection_head is None:
             raise ValueError("Projection head mode must be 'linear', 'non-linear', or 'none'.")
+        
+    def replace_bn_with_gn(self, module, num_groups=32):
+        for name, child in module.named_children():
+            if isinstance(child, nn.BatchNorm2d):
+                num_channels = child.num_features
+
+                # Num_groups must be a divisor of num_channels
+                if num_channels % num_groups != 0:
+                    groups = 1
+                else:
+                    groups = num_groups
+
+                setattr(module, name, nn.GroupNorm(groups, num_channels))
+
+            else:
+                self.replace_bn_with_gn(child, num_groups=num_groups)
+        return module
     
     def freeze_encoder(self):
         for param in self.backbone.parameters():
