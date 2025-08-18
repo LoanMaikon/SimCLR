@@ -57,7 +57,8 @@ def train(model):
                 loss.backward()
                 model.get_optimizer().step()
 
-            scaler.update()
+            if use_cuda:
+                scaler.update()
 
             epoch_train_loss += loss.item()
 
