@@ -106,10 +106,11 @@ def test(model):
 
     with torch.no_grad():
         for batch in model.get_test_dataloader():
-            z1 = model.model_infer(batch[0])
-            targets = batch[1].to(model.get_device())
+            with torch.amp.autocast('cuda' if model.get_gpu_index() is not None else 'cpu'):
+                z1 = model.model_infer(batch[0])
+                targets = batch[1].to(model.get_device())
 
-            output = nn.functional.softmax(z1, dim=1)
+                output = nn.functional.softmax(z1, dim=1)
 
             all_targets.extend(targets.cpu().numpy())
             all_predictions.extend(output.cpu().numpy())
