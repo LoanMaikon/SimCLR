@@ -118,6 +118,12 @@ class Model():
     def get_transfer_learning_num_epochs(self):
         return self.transfer_learning_num_epochs
 
+    def get_transfer_learning_batch_size(self):
+        return self.transfer_learning_batch_size
+    
+    def get_chunk_size(self):
+        return self.train_encoder_chunk_size
+
     def get_linear_evaluation_train_datasets(self):
         return self.linear_evaluation_train_datasets
     

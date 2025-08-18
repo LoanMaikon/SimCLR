@@ -25,7 +25,9 @@ Selecting the epoch with the lowest training loss
 def train(model):
     model.write_on_log(f"Starting training...")
 
-    scaler = torch.amp.GradScaler('cuda' if model.get_gpu_index() is not None else 'cpu')
+    use_cuda = model.get_gpu_index() is not None
+    if use_cuda:
+        scaler = torch.amp.GradScaler('cuda')
 
     best_train_loss = float('inf')
     best_val_loss = float('inf')
@@ -39,14 +41,21 @@ def train(model):
         for batch in model.get_train_dataloader():
             model.get_optimizer().zero_grad()
 
-            with torch.amp.autocast('cuda' if model.get_gpu_index() is not None else 'cpu'):
-                z1, z2 = model.model_infer(batch[0], batch[1])
+            if use_cuda:
+                with torch.amp.autocast('cuda'):
+                    z1, z2 = model.model_infer(batch[0], batch[1])
 
+                    loss = model.apply_criterion(z1, z2)
+            else:
+                z1, z2 = model.model_infer(batch[0], batch[1])
                 loss = model.apply_criterion(z1, z2)
 
-            scaler.scale(loss).backward()
-
-            scaler.step(model.get_optimizer())
+            if use_cuda:
+                scaler.scale(loss).backward()
+                scaler.step(model.get_optimizer())
+            else:
+                loss.backward()
+                model.get_optimizer().step()
 
             scaler.update()
 
@@ -63,8 +72,13 @@ def train(model):
             val_loss = 0.0
             with torch.no_grad():
                 for batch in model.get_validation_dataloader():
-                    z1, z2 = model.model_infer(batch[0], batch[1])
-                    loss = model.apply_criterion(z1, z2)
+                    if use_cuda:
+                        with torch.amp.autocast('cuda'):
+                            z1, z2 = model.model_infer(batch[0], batch[1])
+                            loss = model.apply_criterion(z1, z2)
+                    else:
+                        z1, z2 = model.model_infer(batch[0], batch[1])
+                        loss = model.apply_criterion(z1, z2)
                     val_loss += loss.item()
 
             val_loss /= len(model.get_validation_dataloader())
