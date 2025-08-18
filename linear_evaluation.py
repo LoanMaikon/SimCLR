@@ -25,7 +25,7 @@ def main():
             model = Model(config_path=args.config, gpu_index=args.gpu, operation="linear_evaluation", execution_name=execution_name, label_fraction=label_fraction)
             model.set_num_epochs(num_epochs)
 
-            model.write_on_log(f"Label fraction: {label_fraction}\nNum epochs: {num_epochs}\n")
+            model.write_on_log(f"Label fraction: {label_fraction} Num epochs: {num_epochs}\n")
 
             train(model)
             test(model)

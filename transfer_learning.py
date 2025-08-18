@@ -25,7 +25,7 @@ def main():
             model = Model(config_path=args.config, gpu_index=args.gpu, operation="transfer_learning", execution_name=execution_name, label_fraction=label_fraction)
             model.set_num_epochs(num_epochs)
 
-            model.write_on_log(f"Label fraction: {label_fraction}\nNum epochs: {num_epochs}\n")
+            model.write_on_log(f"Label fraction: {label_fraction} Num epochs: {num_epochs}\n")
 
             train(model)
             test(model)
@@ -36,25 +36,26 @@ For datasets without validation set, the epoch with the lowest training loss is 
 '''
 
 def train(model):
-    model.write_on_log(f"Starting training...")
+    model.write_on_log("Starting training...")
 
     use_cuda = model.get_gpu_index() is not None
-    scaler = None
-    if use_cuda:
-        scaler = torch.amp.GradScaler('cuda')
+    scaler = torch.amp.GradScaler("cuda") if use_cuda else None
 
     accumulation_steps = max(1, model.get_transfer_learning_batch_size() // model.get_chunk_size())
 
+    optimizer = model.get_optimizer()
     best_val_loss = float('inf')
     best_train_loss = float('inf')
+
     for epoch in range(model.get_transfer_learning_num_epochs()):
         model.write_on_log(f"Epoch {epoch + 1}/{model.get_transfer_learning_num_epochs()}")
 
         model.model_to_train()
-        
-        epoch_train_loss = 0.0
-        batch_count = 0
-        optimizer = model.get_optimizer()
+
+        epoch_train_loss_sum = 0.0
+        total_train_samples = 0
+        chunk_counter = 0
+
         optimizer.zero_grad()
         for batch in model.get_train_dataloader():
             inputs = batch[0].to(model.get_device())
@@ -67,21 +68,24 @@ def train(model):
                 if len(chunk_inputs) == 0:
                     continue
 
-                batch_count += 1
+                chunk_counter += 1
 
                 if use_cuda:
-                    with torch.amp.autocast("cuda"):
-                        z1 = model.model_infer(chunk_inputs)
-                        loss = model.apply_criterion(z1, chunk_targets) / accumulation_steps
-                    scaler.scale(loss).backward()
+                    with torch.amp.autocast('cuda'):
+                        preds = model.model_infer(chunk_inputs)
+                        raw_loss = model.apply_criterion(preds, chunk_targets)
+                    scaled = raw_loss / accumulation_steps
+                    scaler.scale(scaled).backward()
                 else:
-                    z1 = model.model_infer(chunk_inputs)
-                    loss = model.apply_criterion(z1, chunk_targets) / accumulation_steps
-                    loss.backward()
+                    preds = model.model_infer(chunk_inputs)
+                    raw_loss = model.apply_criterion(preds, chunk_targets)
+                    (raw_loss / accumulation_steps).backward()
 
-                epoch_train_loss += loss.item() 
+                chunk_size = chunk_inputs.size(0)
+                epoch_train_loss_sum += raw_loss.item() * chunk_size
+                total_train_samples += chunk_size
 
-                if batch_count % accumulation_steps == 0:
+                if chunk_counter % accumulation_steps == 0 or i + model.get_chunk_size() >= len(inputs):
                     if use_cuda:
                         scaler.step(optimizer)
                         scaler.update()
@@ -89,51 +93,46 @@ def train(model):
                         optimizer.step()
                     optimizer.zero_grad()
 
-        if batch_count % accumulation_steps != 0:
-            if use_cuda:
-                scaler.step(optimizer)
-                scaler.update()
-            else:
-                optimizer.step()
-            optimizer.zero_grad()
-
-        epoch_train_loss = epoch_train_loss / batch_count if batch_count > 0 else 0.0
+        epoch_train_loss = (epoch_train_loss_sum / total_train_samples)
         model.write_on_log(f"Training loss: {epoch_train_loss:.4f}")
 
         if model.has_validation_set():
             model.model_to_eval()
+            epoch_val_loss_sum = 0.0
+            total_val_samples = 0
 
-            epoch_val_loss = 0.0
-            val_count = 0
             with torch.no_grad():
                 for batch in model.get_val_dataloader():
                     inputs = batch[0].to(model.get_device())
                     targets = batch[1].to(model.get_device())
+
                     if use_cuda:
-                        with torch.amp.autocast("cuda"):
-                            z1 = model.model_infer(inputs)
-                            loss = model.apply_criterion(z1, targets) / accumulation_steps
+                        with torch.amp.autocast('cuda'):
+                            preds = model.model_infer(inputs)
+                            raw_loss = model.apply_criterion(preds, targets)
                     else:
-                        z1 = model.model_infer(inputs)
-                        loss = model.apply_criterion(z1, targets) / accumulation_steps
-                    epoch_val_loss += loss.item()
-                    val_count += 1
-            
-            epoch_val_loss /= val_count if val_count > 0 else 1.0
+                        preds = model.model_infer(inputs)
+                        raw_loss = model.apply_criterion(preds, targets)
+
+                    batch_size = inputs.size(0)
+                    epoch_val_loss_sum += raw_loss.item() * batch_size
+                    total_val_samples += batch_size
+
+            epoch_val_loss = (epoch_val_loss_sum / total_val_samples) if total_val_samples > 0 else 0.0
             model.write_on_log(f"Validation loss: {epoch_val_loss:.4f}")
 
             if epoch_val_loss < best_val_loss:
                 model.write_on_log(f"Validation loss improved from {best_val_loss:.4f} to {epoch_val_loss:.4f}. Saving model...")
                 best_val_loss = epoch_val_loss
                 model.save_model()
-
         else:
             if epoch_train_loss < best_train_loss:
                 model.write_on_log(f"Training loss improved from {best_train_loss:.4f} to {epoch_train_loss:.4f}. Saving model...")
                 best_train_loss = epoch_train_loss
                 model.save_model()
-        
-        model.write_on_log(f"")
+
+        model.write_on_log("")
+
 
 def test(model):
     model.write_on_log(f"Starting testing...")
