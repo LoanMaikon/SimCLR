@@ -38,8 +38,7 @@ For datasets without validation set, the epoch with the lowest training loss is 
 def train(model):
     model.write_on_log("Starting training...")
 
-    use_cuda = model.get_gpu_index() is not None
-    scaler = torch.amp.GradScaler("cuda") if use_cuda else None
+    scaler = torch.amp.GradScaler()
 
     accumulation_steps = max(1, model.get_transfer_learning_batch_size() // model.get_chunk_size())
 
@@ -70,27 +69,20 @@ def train(model):
 
                 chunk_counter += 1
 
-                if use_cuda:
-                    with torch.amp.autocast('cuda'):
-                        preds = model.model_infer(chunk_inputs)
-                        raw_loss = model.apply_criterion(preds, chunk_targets)
-                    scaled = raw_loss / accumulation_steps
-                    scaler.scale(scaled).backward()
-                else:
+                with torch.autocast('cuda') if model.get_device().type == 'cuda' else torch.autocast('cpu'):
                     preds = model.model_infer(chunk_inputs)
                     raw_loss = model.apply_criterion(preds, chunk_targets)
-                    (raw_loss / accumulation_steps).backward()
+                scaled = raw_loss / accumulation_steps
+                scaler.scale(scaled).backward()
 
                 chunk_size = chunk_inputs.size(0)
                 epoch_train_loss_sum += raw_loss.item() * chunk_size
                 total_train_samples += chunk_size
 
                 if chunk_counter % accumulation_steps == 0 or i + model.get_chunk_size() >= len(inputs):
-                    if use_cuda:
-                        scaler.step(optimizer)
-                        scaler.update()
-                    else:
-                        optimizer.step()
+                    scaler.step(optimizer)
+                    scaler.update()
+
                     optimizer.zero_grad()
 
         epoch_train_loss = (epoch_train_loss_sum / total_train_samples)
@@ -106,11 +98,7 @@ def train(model):
                     inputs = batch[0].to(model.get_device())
                     targets = batch[1].to(model.get_device())
 
-                    if use_cuda:
-                        with torch.amp.autocast('cuda'):
-                            preds = model.model_infer(inputs)
-                            raw_loss = model.apply_criterion(preds, targets)
-                    else:
+                    with torch.autocast('cuda') if model.get_device().type == 'cuda' else torch.autocast('cpu'):
                         preds = model.model_infer(inputs)
                         raw_loss = model.apply_criterion(preds, targets)
 
@@ -139,24 +127,16 @@ def test(model):
 
     model.model_to_eval()
 
-    use_cuda = model.get_gpu_index() is not None
-
     all_targets = []
     all_predictions = []
 
     with torch.no_grad():
         for batch in model.get_test_dataloader():
-            if use_cuda:
-                with torch.amp.autocast('cuda'):
-                    z1 = model.model_infer(batch[0])
-                    targets = batch[1].to(model.get_device())
-
-                    output = nn.functional.softmax(z1, dim=1)
-            else:
+            with torch.autocast('cuda') if model.get_device().type == 'cuda' else torch.autocast('cpu'):
                 z1 = model.model_infer(batch[0])
-                targets = batch[1]
+                targets = batch[1].to(model.get_device())
 
-                output = nn.functional.softmax(z1, dim=1)
+            output = nn.functional.softmax(z1, dim=1)
 
             all_targets.extend(targets.cpu().numpy())
             all_predictions.extend(output.cpu().numpy())
