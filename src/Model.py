@@ -34,7 +34,7 @@ NUM_CLASSES = {
 execution_name is used for linear evaluation and fine tuning to load a determined execution of train_encoder.py
 '''
 class Model():
-    def __init__(self, config_path, gpu_index, operation, execution_name=None, label_fraction=None):
+    def __init__(self, config_path, gpu_index, operation, execution_name=None, label_fraction=None, lr=None):
         self.operation = operation
         self.execution_name = execution_name if execution_name is not None else None
         self.device = torch.device(f'cuda:{gpu_index}' if torch.cuda.is_available() else 'cpu') if gpu_index is not None else torch.device('cpu')
@@ -61,7 +61,7 @@ class Model():
                 self._load_train_encoder_dataloaders()
 
                 self._load_train_encoder_criterion()
-                self._load_train_encoder_optimizer()
+                self._load_train_encoder_optimizer(lr=lr)
                 self._load_train_encoder_scheduler()
             
             case "linear_evaluation":
@@ -210,8 +210,10 @@ class Model():
     '''
     The SimCLR defines lr = 0.3 * batch_size / 256 and weight decay of 1e-6 (B.6.)
     '''
-    def _load_train_encoder_optimizer(self):
-        self.optimizer = optim.SGD(self.model.parameters(), lr=0.3 * self.train_encoder_batch_size / 256, momentum=0.9, weight_decay=1e-6, nesterov=True)
+    def _load_train_encoder_optimizer(self, lr=None):
+        if lr is None:
+            lr = 0.3 * self.train_encoder_batch_size / 256
+        self.optimizer = optim.AdamW(self.model.parameters(), lr=lr, weight_decay=1e-6)
 
         # Still have to make LARS
 

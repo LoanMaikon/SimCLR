@@ -38,17 +38,17 @@ class resnet50(nn.Module):
             case 'linear':
                 self.projection_head = nn.Sequential(
                     nn.Linear(self.encoder_out_features, self.projection_dim, bias=False),
-                    nn.GroupNorm(32, self.projection_dim),
+                    nn.BatchNorm1d(self.projection_dim, affine=False),
                 )
 
 
             case 'non-linear':
                 self.projection_head = nn.Sequential(
                     nn.Linear(self.encoder_out_features, self.encoder_out_features, bias=False),
-                    nn.GroupNorm(32, self.encoder_out_features),
+                    nn.BatchNorm1d(self.encoder_out_features, affine=False),
                     nn.ReLU(),
                     nn.Linear(self.encoder_out_features, self.projection_dim, bias=False),
-                    nn.GroupNorm(32, self.projection_dim),
+                    nn.BatchNorm1d(self.projection_dim, affine=False),
                 )
             
             case 'none':

@@ -15,7 +15,7 @@ from src.Model import Model
 def main():
     args = get_args()
     
-    model = Model(config_path=args.config, gpu_index=args.gpu, operation="train_encoder")
+    model = Model(config_path=args.config, gpu_index=args.gpu, operation="train_encoder", lr=args.lr)
 
     train(model)
 
@@ -90,6 +90,7 @@ def get_args():
 
     parser.add_argument("--config", type=str, help="Path to the config file", required=True)
     parser.add_argument("--gpu", type=int, help="GPU index to use", required=False)
+    parser.add_argument("--lr", type=float, help="Learning rate for the optimizer", required=False)
 
     return parser.parse_args()
 
