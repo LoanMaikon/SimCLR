@@ -22,7 +22,7 @@ class resnet18(nn.Module):
 
         #self.backbone = models.resnet18(weights=None) # Training from scratch (recommended)
 
-        self.backbone = models.resnet18(weights=models.ResNet18_Weights.IMAGENET1K_V2) # Using pretrained weights
+        self.backbone = models.resnet18(weights=models.ResNet18_Weights.IMAGENET1K_V1) # Using pretrained weights
 
         self.projection_head = None
         self.encoder_out_features = self.backbone.fc.in_features
