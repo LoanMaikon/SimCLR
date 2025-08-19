@@ -12,6 +12,7 @@ import os
 from time import strftime, localtime
 import json
 
+from .resnet18 import resnet18
 from .resnet50 import resnet50
 from .custom_dataset import custom_dataset
 from .nt_xent import nt_xent
@@ -588,7 +589,7 @@ class Model():
 
         match self.train_encoder_model_name:
             case 'resnet18':
-                pass
+                self.model = resnet18(self.train_encoder_projection_head_mode, self.train_encoder_projection_dim, self.train_encoder_use_checkpoint)
 
             case 'resnet50':
                 self.model = resnet50(self.train_encoder_projection_head_mode, self.train_encoder_projection_dim, self.train_encoder_use_checkpoint)

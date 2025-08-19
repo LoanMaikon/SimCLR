@@ -1,12 +1,12 @@
 output_path: /disk0/lmk22/simclr_output/train_encoder_imagenet
 datasets_path: /mnt/raid1/lmk22/datasets
 train_datasets: [imagenet]
-batch_size: 512 # Paper uses 4096
-chunk_size: 512 # Number of samples to infer at the same time (divide batch size)
+batch_size: 1024 # Paper uses 4096
+chunk_size: 1024 # Number of samples to infer at the same time (divide batch size)
 num_epochs: 100 # The paper uses 100 epochs
 num_workers: 40
 prefetch_factor: 2
-model: resnet50
+model: resnet18
 transform_resize: [224, 224]
 projection_head_mode: non-linear # linear, non-linear or none
 temperature: 0.5 # The paper tells us that the optimal and stable temperature is 0.5
