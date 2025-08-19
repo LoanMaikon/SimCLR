@@ -39,7 +39,7 @@ def train(model):
         for batch in model.get_train_dataloader():
             model.get_optimizer().zero_grad()
 
-            with torch.autocast('cuda') if model.get_device().type == 'cuda' else torch.autocast('cpu'):
+            with torch.amp.autocast('cuda') if model.get_device().type == 'cuda' else torch.autocast('cpu'):
                 z1, z2 = model.model_infer(batch[0], batch[1])
                 loss = model.apply_criterion(z1, z2)
 
@@ -62,7 +62,7 @@ def train(model):
             with torch.no_grad():
                 for batch in model.get_validation_dataloader():
 
-                    with torch.autocast('cuda') if model.get_device().type == 'cuda' else torch.autocast('cpu'):
+                    with torch.amp.autocast('cuda') if model.get_device().type == 'cuda' else torch.autocast('cpu'):
                         z1, z2 = model.model_infer(batch[0], batch[1])
                         loss = model.apply_criterion(z1, z2)
                     val_loss += loss.item()

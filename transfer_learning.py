@@ -69,7 +69,7 @@ def train(model):
 
                 chunk_counter += 1
 
-                with torch.autocast('cuda') if model.get_device().type == 'cuda' else torch.autocast('cpu'):
+                with torch.amp.autocast('cuda') if model.get_device().type == 'cuda' else torch.autocast('cpu'):
                     preds = model.model_infer(chunk_inputs)
                     raw_loss = model.apply_criterion(preds, chunk_targets)
                 scaled = raw_loss / accumulation_steps
@@ -98,7 +98,7 @@ def train(model):
                     inputs = batch[0].to(model.get_device())
                     targets = batch[1].to(model.get_device())
 
-                    with torch.autocast('cuda') if model.get_device().type == 'cuda' else torch.autocast('cpu'):
+                    with torch.amp.autocast('cuda') if model.get_device().type == 'cuda' else torch.autocast('cpu'):
                         preds = model.model_infer(inputs)
                         raw_loss = model.apply_criterion(preds, targets)
 
@@ -132,7 +132,7 @@ def test(model):
 
     with torch.no_grad():
         for batch in model.get_test_dataloader():
-            with torch.autocast('cuda') if model.get_device().type == 'cuda' else torch.autocast('cpu'):
+            with torch.amp.autocast('cuda') if model.get_device().type == 'cuda' else torch.autocast('cpu'):
                 z1 = model.model_infer(batch[0])
                 targets = batch[1].to(model.get_device())
 
