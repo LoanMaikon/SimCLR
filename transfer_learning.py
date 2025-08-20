@@ -22,8 +22,8 @@ def main():
 
     for execution_name in executions_names:
         for label_fraction, num_epochs in zip(LABEL_FRACTIONS, NUM_EPOCHS):
-            model = Model(config_path=args.config, gpu_index=args.gpu, operation="transfer_learning", execution_name=execution_name, label_fraction=label_fraction)
-            model.set_num_epochs(num_epochs)
+            model = Model(config_path=args.config, gpu_index=args.gpu, operation="transfer_learning", execution_name=execution_name, label_fraction=label_fraction, 
+                          num_epochs=num_epochs, lr=args.lr, weight_decay=args.weight_decay)
 
             model.write_on_log(f"Label fraction: {label_fraction} Num epochs: {num_epochs}\n")
 
@@ -46,7 +46,12 @@ def train(model):
     best_val_loss = float('inf')
     best_train_loss = float('inf')
 
+    train_losses = []
+    val_losses = []
+    lrs = []
+
     for epoch in range(model.get_transfer_learning_num_epochs()):
+        lrs.append(model.get_learning_rate())
         model.write_on_log(f"Epoch {epoch + 1}/{model.get_transfer_learning_num_epochs()}")
 
         model.model_to_train()
@@ -86,6 +91,7 @@ def train(model):
                     optimizer.zero_grad()
 
         epoch_train_loss = (epoch_train_loss_sum / total_train_samples)
+        train_losses.append(epoch_train_loss)
         model.write_on_log(f"Training loss: {epoch_train_loss:.4f}")
 
         if model.has_validation_set():
@@ -107,6 +113,7 @@ def train(model):
                     total_val_samples += batch_size
 
             epoch_val_loss = (epoch_val_loss_sum / total_val_samples) if total_val_samples > 0 else 0.0
+            val_losses.append(epoch_val_loss)
             model.write_on_log(f"Validation loss: {epoch_val_loss:.4f}")
 
             if epoch_val_loss < best_val_loss:
@@ -120,7 +127,23 @@ def train(model):
                 model.save_model()
 
         model.write_on_log("")
+    
+    model.plot_fig(
+        x=range(1, model.get_train_encoder_num_epochs() + 1),
+        x_name="Epochs",
+        y=train_losses,
+        y_name="Training Loss",
+        fig_name="train_loss.png"
+    )
 
+    if model.has_validation_set():
+        model.plot_fig(
+            x=range(1, model.get_train_encoder_num_epochs() + 1),
+            x_name="Epochs",
+            y=val_losses,
+            y_name="Validation Loss",
+            fig_name="val_loss.png"
+        )
 
 def test(model):
     model.write_on_log(f"Starting testing...")
@@ -166,6 +189,8 @@ def get_args():
     parser = argparse.ArgumentParser(description="Linear Evaluation Training")
     parser.add_argument("--config", type=str, help="Path to config file", required=True)
     parser.add_argument("--gpu", type=int, help="GPU index", required=False)
+    parser.add_argument("--lr", type=float, help="Learning rate for the optimizer", required=False)
+    parser.add_argument("--weight_decay", type=float, help="Weight decay for the optimizer", required=False)
 
     return parser.parse_args()
 

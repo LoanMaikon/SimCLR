@@ -32,14 +32,15 @@ NUM_CLASSES = {
 }
 
 '''
-execution_name is used for linear evaluation and fine tuning to load a determined execution of train_encoder.py
+<execution_name> is used for linear evaluation and fine tuning to load a determined execution of train_encoder.py
 '''
 class Model():
-    def __init__(self, config_path, gpu_index, operation, execution_name=None, label_fraction=None, lr=None):
+    def __init__(self, config_path, gpu_index, operation, execution_name=None, label_fraction=None, lr=None, weight_decay=None, num_epochs=None):
         self.operation = operation
         self.execution_name = execution_name if execution_name is not None else None
         self.device = torch.device(f'cuda:{gpu_index}' if torch.cuda.is_available() else 'cpu') if gpu_index is not None else torch.device('cpu')
-        self.label_fraction = label_fraction
+        self.label_fraction = label_fraction if label_fraction is not None else None
+        self.num_epochs = num_epochs if num_epochs is not None else None # User for Linear Evaluation and Transfer Learning
 
         if self.device == torch.device('cpu'):
             torch.set_num_threads(os.cpu_count())
@@ -62,7 +63,7 @@ class Model():
                 self._load_train_encoder_dataloaders()
 
                 self._load_train_encoder_criterion()
-                self._load_train_encoder_optimizer(lr=lr)
+                self._load_train_encoder_optimizer(lr=lr, weight_decay=weight_decay)
                 self._load_train_encoder_scheduler()
             
             case "linear_evaluation":
@@ -84,7 +85,7 @@ class Model():
                 self._load_linear_evaluation_dataloaders()
 
                 self._load_linear_evaluation_criterion()
-                self._load_linear_evaluation_optimizer()
+                self._load_linear_evaluation_optimizer(lr=lr, weight_decay=weight_decay)
 
             case "transfer_learning":
                 self._load_transfer_learning_config(config_path)
@@ -105,16 +106,7 @@ class Model():
                 self._load_transfer_learning_dataloaders()
 
                 self._load_transfer_learning_criterion()
-                self._load_transfer_learning_optimizer()
-
-    def set_num_epochs(self, num_epochs):
-        match self.operation:
-            case "train_encoder":
-                self.train_encoder_num_epochs = num_epochs
-            case "linear_evaluation":
-                self.linear_evaluation_num_epochs = num_epochs
-            case "transfer_learning":
-                self.transfer_learning_num_epochs = num_epochs
+                self._load_transfer_learning_optimizer(lr=lr, weight_decay=weight_decay)
 
     def get_transfer_learning_num_epochs(self):
         return self.transfer_learning_num_epochs
@@ -195,26 +187,42 @@ class Model():
         self.scheduler = torch.optim.lr_scheduler.LambdaLR(self.optimizer, lr_lambda=__lr_lambda)
 
     '''
-    The SimCLR defines lr = 0.05 * batch_size / 256 (B.5.) for fine tuning on ImageNet
-    It also uses SGD with momentum 0.9, no use of weight decay and a warmup
+    The SimCLR defines lr = 0.05 * batch_size / 256 (B.5.) for fine tuning on ImageNet. We will use 0.0005 * batch_size / 256
+    It also uses SGD with momentum 0.9
     '''
-    def _load_transfer_learning_optimizer(self):
-        self.optimizer = optim.SGD(self.model.parameters(), lr=0.05 * self.transfer_learning_batch_size / 256, momentum=0.9, weight_decay=0.0, nesterov=True)
-
-    '''
-    The SimCLR defines lr = 0.1 * batch_size / 256 (B.6.) for linear evaluation on ImageNet
-    It also uses SGD with momentum 0.9, no use of weight decay and a warmup
-    '''
-    def _load_linear_evaluation_optimizer(self):
-        self.optimizer = optim.SGD(self.model.parameters(), lr=0.1 * self.linear_evaluation_batch_size / 256, momentum=0.9, weight_decay=0.0, nesterov=True)
-
-    '''
-    The SimCLR defines lr = 0.3 * batch_size / 256 and weight decay of 1e-6 (B.6.)
-    '''
-    def _load_train_encoder_optimizer(self, lr=None):
+    def _load_transfer_learning_optimizer(self, lr=None, weight_decay=None):
         if lr is None:
-            lr = 0.3 * self.train_encoder_batch_size / 256
-        self.optimizer = optim.AdamW(self.model.parameters(), lr=lr, weight_decay=1e-6)
+            lr = 0.0005 * self.transfer_learning_batch_size / 256
+
+        if weight_decay is None:
+            weight_decay = 1e-6
+
+        self.optimizer = optim.SGD(self.model.parameters(), lr=lr, momentum=0.9, weight_decay=weight_decay, nesterov=True)
+
+    '''
+    The SimCLR defines lr = 0.1 * batch_size / 256 (B.6.) for linear evaluation on ImageNet. We will use 0,001 * batch_size / 256
+    It also uses SGD with momentum 0.9
+    '''
+    def _load_linear_evaluation_optimizer(self, lr=None, weight_decay=None):
+        if lr is None:
+            lr = 0.001 * self.linear_evaluation_batch_size / 256
+        
+        if weight_decay is None:
+            weight_decay = 1e-6
+
+        self.optimizer = optim.SGD(self.model.parameters(), lr=lr, momentum=0.9, weight_decay=weight_decay, nesterov=True)
+
+    '''
+    The SimCLR defines lr = 0.3 * batch_size / 256 and weight decay of 1e-6 (B.6.). We will use 0.003 * batch_size / 256
+    '''
+    def _load_train_encoder_optimizer(self, lr=None, weight_decay=None):
+        if lr is None:
+            lr = 0.003 * self.train_encoder_batch_size / 256
+
+        if weight_decay is None:
+            weight_decay = 1e-6
+
+        self.optimizer = optim.AdamW(self.model.parameters(), lr=lr, weight_decay=weight_decay)
 
         # Still have to make LARS
 
@@ -589,10 +597,10 @@ class Model():
 
         match self.train_encoder_model_name:
             case 'resnet18':
-                self.model = resnet18(self.train_encoder_projection_head_mode, self.train_encoder_projection_dim, self.train_encoder_use_checkpoint)
+                self.model = resnet18(self.train_encoder_projection_head_mode, self.train_encoder_projection_dim, self.train_encoder_use_checkpoint, self.train_encoder_pretrained)
 
             case 'resnet50':
-                self.model = resnet50(self.train_encoder_projection_head_mode, self.train_encoder_projection_dim, self.train_encoder_use_checkpoint)
+                self.model = resnet50(self.train_encoder_projection_head_mode, self.train_encoder_projection_dim, self.train_encoder_use_checkpoint, self.train_encoder_pretrained)
             
             case 'mobilenet_v3_large':
                 pass
@@ -666,6 +674,7 @@ class Model():
         self.transfer_learning_batch_size = config['batch_size']
         self.transfer_learning_encoder_config_path = config['encoder_config']
         self.transfer_learning_config_path = config_path
+        self.transfer_learning_num_epochs = self.num_epochs
 
     def _load_linear_evaluation_config(self, config_path):
         config = yaml.safe_load(open(config_path, 'r'))
@@ -674,6 +683,7 @@ class Model():
         self.linear_evaluation_batch_size = config['batch_size']
         self.linear_evaluation_encoder_config_path = config['encoder_config']
         self.linear_evaluation_config_path = config_path
+        self.linear_evaluation_num_epochs = self.num_epochs
 
     def _load_train_encoder_config(self, config_path):
         config = yaml.safe_load(open(config_path, 'r'))
@@ -700,6 +710,25 @@ class Model():
         self.train_encoder_prefetch_factor = int(config['prefetch_factor'])
         self.train_encoder_pin_memory = True if config['pin_memory'] == "True" else False
         self.train_encoder_use_checkpoint = True if config['use_checkpoint'] == "True" else False
+        self.train_encoder_pretrained = True if config['pretrained'] == "True" else False
+
+    def plot_fig(self, x, x_name, y, y_name, fig_name):
+        plt.figure()
+        plt.plot(x, y)
+        plt.xlabel(x_name)
+        plt.ylabel(y_name)
+        plt.title(fig_name)
+
+        output_path = None
+        match self.operation:
+            case "train_encoder": output_path = self.train_encoder_output_path
+            case "linear_evaluation": output_path = self.linear_evaluation_output_path
+            case "transfer_learning": output_path = self.transfer_learning_output_path
+
+        os.makedirs(output_path + "figs", exist_ok=True)
+
+        plt.savefig(os.path.join(output_path + "figs", f"{fig_name}.png"))
+        plt.close()
 
     def write_on_log(self, text):
         time = strftime("%Y-%m-%d %H:%M:%S - ", localtime())

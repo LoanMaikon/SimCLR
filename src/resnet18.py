@@ -14,15 +14,16 @@ import os
 from time import strftime, localtime
 
 class resnet18(nn.Module):
-    def __init__(self, projection_head_mode, projection_dim, use_checkpoint):
+    def __init__(self, projection_head_mode, projection_dim, use_checkpoint, pretrained):
         super(resnet18, self).__init__()
         self.projection_head_mode = projection_head_mode
         self.projection_dim = projection_dim
         self.use_checkpoint = use_checkpoint
 
-        #self.backbone = models.resnet18(weights=None) # Training from scratch (recommended)
-
-        self.backbone = models.resnet18(weights=models.ResNet18_Weights.IMAGENET1K_V1) # Using pretrained weights
+        if pretrained:
+            self.backbone = models.resnet18(weights=models.ResNet18_Weights.IMAGENET1K_V1)
+        else:
+            self.backbone = models.resnet18(weights=None)
 
         self.projection_head = None
         self.encoder_out_features = self.backbone.fc.in_features
