@@ -3,3 +3,5 @@ train_datasets: [fgvc-aircraft]
 batch_size: 256
 label_fractions: [1.0]
 num_epochs: [90]
+lr: [0.001]
+weight_decay: [0.000001]

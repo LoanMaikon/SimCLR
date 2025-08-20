@@ -14,18 +14,20 @@ from src.Model import Model
 
 LABEL_FRACTIONS = None
 NUM_EPOCHS = None
+LRS = None
+WEIGHT_DECAYS = None
 
 def main():
     args = get_args()
     executions_names = get_executions_names(args.config)
-    _set_label_fractions_and_num_epochs(args.config)
+    _set_configs(args.config)
 
     for execution_name in executions_names:
-        for label_fraction, num_epochs in zip(LABEL_FRACTIONS, NUM_EPOCHS):
+        for label_fraction, num_epochs, lr, weight_decay in zip(LABEL_FRACTIONS, NUM_EPOCHS, LRS, WEIGHT_DECAYS):
             model = Model(config_path=args.config, gpu_index=args.gpu, operation="transfer_learning", execution_name=execution_name, label_fraction=label_fraction, 
-                          num_epochs=num_epochs, lr=args.lr, weight_decay=args.weight_decay)
+                          num_epochs=num_epochs, lr=lr, weight_decay=weight_decay)
 
-            model.write_on_log(f"Label fraction: {label_fraction} Num epochs: {num_epochs}\n")
+            model.write_on_log(f"Label fraction: {label_fraction} Num epochs: {num_epochs} Learning rate: {lr} Weight decay: {weight_decay}\n")
 
             train(model)
             test(model)
@@ -171,11 +173,13 @@ def test(model):
 
     model.write_on_log(f"Testing completed\n")
 
-def _set_label_fractions_and_num_epochs(config):
-    global LABEL_FRACTIONS, NUM_EPOCHS
+def _set_configs(config):
+    global LABEL_FRACTIONS, NUM_EPOCHS, LRS, WEIGHT_DECAYS
     transfer_learning_config = yaml.safe_load(open(config, 'r'))
     LABEL_FRACTIONS = transfer_learning_config['label_fractions']
     NUM_EPOCHS = transfer_learning_config['num_epochs']
+    LRS = transfer_learning_config['lr']
+    WEIGHT_DECAYS = transfer_learning_config['weight_decay']
 
 def get_executions_names(config):
     transfer_learning_config = yaml.safe_load(open(config, 'r'))
@@ -189,8 +193,6 @@ def get_args():
     parser = argparse.ArgumentParser(description="Linear Evaluation Training")
     parser.add_argument("--config", type=str, help="Path to config file", required=True)
     parser.add_argument("--gpu", type=int, help="GPU index", required=False)
-    parser.add_argument("--lr", type=float, help="Learning rate for the optimizer", required=False)
-    parser.add_argument("--weight_decay", type=float, help="Weight decay for the optimizer", required=False)
 
     return parser.parse_args()
 

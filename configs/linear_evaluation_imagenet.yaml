@@ -3,3 +3,5 @@ train_datasets: [imagenet]
 batch_size: 4096 # B.6. Defines batch size as 4096
 label_fractions: [1.0]
 num_epochs: [90] # B.6. Defines number of epochs as 90
+lr: [0.004]
+weight_decay: [0.000001]

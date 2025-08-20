@@ -167,8 +167,6 @@ def get_args():
     parser = argparse.ArgumentParser(description="Linear Evaluation Training")
     parser.add_argument("--config", type=str, help="Path to config file", required=True)
     parser.add_argument("--gpu", type=int, help="GPU index", required=False)
-    parser.add_argument("--lr", type=float, help="Learning rate for the optimizer", required=False)
-    parser.add_argument("--weight_decay", type=float, help="Weight decay for the optimizer", required=False)
 
     return parser.parse_args()
 

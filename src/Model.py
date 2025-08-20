@@ -39,8 +39,6 @@ class Model():
         self.operation = operation
         self.execution_name = execution_name if execution_name is not None else None
         self.device = torch.device(f'cuda:{gpu_index}' if torch.cuda.is_available() else 'cpu') if gpu_index is not None else torch.device('cpu')
-        self.label_fraction = label_fraction if label_fraction is not None else None
-        self.num_epochs = num_epochs if num_epochs is not None else None # User for Linear Evaluation and Transfer Learning
 
         if self.device == torch.device('cpu'):
             torch.set_num_threads(os.cpu_count())
@@ -63,10 +61,16 @@ class Model():
                 self._load_train_encoder_dataloaders()
 
                 self._load_train_encoder_criterion()
-                self._load_train_encoder_optimizer(lr=lr, weight_decay=weight_decay)
+                self._load_train_encoder_optimizer()
                 self._load_train_encoder_scheduler()
             
             case "linear_evaluation":
+                self.linear_evaluation_num_epochs = num_epochs
+                self.linear_evaluation_label_fraction = label_fraction
+                self.linear_evaluation_lr = lr
+                self.linear_evaluation_weight_decay = weight_decay
+                assert [label_fraction, num_epochs, lr, weight_decay] is not None, "Label fraction, number of epochs, learning rate and weight decay must be provided for linear evaluation."
+
                 self._load_linear_evaluation_config(config_path)
                 self._load_train_encoder_config(self.linear_evaluation_encoder_config_path)
 
@@ -85,9 +89,15 @@ class Model():
                 self._load_linear_evaluation_dataloaders()
 
                 self._load_linear_evaluation_criterion()
-                self._load_linear_evaluation_optimizer(lr=lr, weight_decay=weight_decay)
+                self._load_linear_evaluation_optimizer()
 
             case "transfer_learning":
+                self.transfer_learning_num_epochs = num_epochs
+                self.transfer_learning_label_fraction = label_fraction
+                self.transfer_learning_lr = lr
+                self.transfer_learning_weight_decay = weight_decay
+                assert [label_fraction, num_epochs, lr, weight_decay] is not None, "Label fraction, number of epochs, learning rate and weight decay must be provided for transfer learning."
+
                 self._load_transfer_learning_config(config_path)
                 self._load_train_encoder_config(self.transfer_learning_encoder_config_path)
 
@@ -186,41 +196,18 @@ class Model():
 
         self.scheduler = torch.optim.lr_scheduler.LambdaLR(self.optimizer, lr_lambda=__lr_lambda)
 
-    '''
-    The SimCLR defines lr = 0.05 * batch_size / 256 (B.5.) for fine tuning on ImageNet. We will use 0.0005 * batch_size / 256
-    It also uses SGD with momentum 0.9
-    '''
-    def _load_transfer_learning_optimizer(self, lr=None, weight_decay=None):
-        if lr is None:
-            lr = 0.0005 * self.transfer_learning_batch_size / 256
+    def _load_transfer_learning_optimizer(self):
+        self.optimizer = optim.SGD(self.model.parameters(), lr=self.transfer_learning_lr, momentum=0.9, weight_decay=self.transfer_learning_weight_decay, nesterov=True)
 
-        if weight_decay is None:
-            weight_decay = 1e-6
-
-        self.optimizer = optim.SGD(self.model.parameters(), lr=lr, momentum=0.9, weight_decay=weight_decay, nesterov=True)
-
-    '''
-    The SimCLR defines lr = 0.1 * batch_size / 256 (B.6.) for linear evaluation on ImageNet. We will use 0,001 * batch_size / 256
-    It also uses SGD with momentum 0.9
-    '''
-    def _load_linear_evaluation_optimizer(self, lr=None, weight_decay=None):
-        if lr is None:
-            lr = 0.001 * self.linear_evaluation_batch_size / 256
-        
-        if weight_decay is None:
-            weight_decay = 1e-6
-
-        self.optimizer = optim.SGD(self.model.parameters(), lr=lr, momentum=0.9, weight_decay=weight_decay, nesterov=True)
+    def _load_linear_evaluation_optimizer(self):
+        self.optimizer = optim.SGD(self.model.parameters(), lr=self.linear_evaluation_lr, momentum=0.9, weight_decay=self.linear_evaluation_weight_decay, nesterov=True)
 
     '''
     The SimCLR defines lr = 0.3 * batch_size / 256 and weight decay of 1e-6 (B.6.). We will use 0.003 * batch_size / 256
     '''
-    def _load_train_encoder_optimizer(self, lr=None, weight_decay=None):
-        if lr is None:
-            lr = 0.003 * self.train_encoder_batch_size / 256
-
-        if weight_decay is None:
-            weight_decay = 1e-6
+    def _load_train_encoder_optimizer(self):
+        lr = 0.003 * self.train_encoder_batch_size / 256
+        weight_decay = 1e-6
 
         self.optimizer = optim.AdamW(self.model.parameters(), lr=lr, weight_decay=weight_decay)
 
@@ -235,12 +222,12 @@ class Model():
             case "linear_evaluation":
                 models_path = self.linear_evaluation_output_path + "models"
                 os.makedirs(models_path, exist_ok=True)
-                torch.save(self.model.state_dict(), os.path.join(models_path, f"model_{str(int(self.label_fraction * 100))}.pth"))
+                torch.save(self.model.state_dict(), os.path.join(models_path, f"model_{str(int(self.linear_evaluation_label_fraction * 100))}.pth"))
 
             case "transfer_learning":
                 models_path = self.transfer_learning_output_path + "/models"
                 os.makedirs(models_path, exist_ok=True)
-                torch.save(self.model.state_dict(), os.path.join(models_path, f"model_{str(int(self.label_fraction * 100))}.pth"))
+                torch.save(self.model.state_dict(), os.path.join(models_path, f"model_{str(int(self.transfer_learning_label_fraction * 100))}.pth"))
 
     def get_train_dataloader(self):
         return self.train_dataloader
@@ -300,7 +287,7 @@ class Model():
             datasets=self.transfer_learning_train_datasets,
             datasets_folder_path=self.train_encoder_datasets_path,
             transform=self.transfer_learning_transform_train,
-            label_fraction=self.label_fraction
+            label_fraction=self.transfer_learning_label_fraction
         )
 
         self.train_dataloader = torch.utils.data.DataLoader(
@@ -355,7 +342,7 @@ class Model():
             datasets=self.linear_evaluation_train_datasets,
             datasets_folder_path=self.train_encoder_datasets_path,
             transform=self.linear_evaluation_transform_train,
-            label_fraction=self.label_fraction
+            label_fraction=self.linear_evaluation_label_fraction
         )
 
         self.train_dataloader = torch.utils.data.DataLoader(
@@ -485,7 +472,7 @@ class Model():
                 total += 1
             
             return correct / total if total > 0 else 0.0
-        
+
         def _compute_mean_per_class_accuracy(all_predictions, targets):
             class_correct = {}
             class_total = {}
@@ -505,16 +492,21 @@ class Model():
             return sum(class_correct[label] / class_total[label] for label in class_correct) / len(class_correct)
 
         output_path = None
+        label_fraction = None
         match self.operation:
-            case "linear_evaluation": output_path = self.linear_evaluation_output_path
-            case "transfer_learning": output_path = self.transfer_learning_output_path
+            case "linear_evaluation": 
+                output_path = self.linear_evaluation_output_path
+                label_fraction = self.linear_evaluation_label_fraction
+            case "transfer_learning":
+                output_path = self.transfer_learning_output_path
+                label_fraction = self.transfer_learning_label_fraction
             case _: assert False, f"Operation {self.operation} does not save results."
 
         top_5_accuracy = _compute_top_accuracy(all_predictions, targets, top_k=5)
         top_1_accuracy = _compute_top_accuracy(all_predictions, targets, top_k=1)
         mean_per_class_accuracy = _compute_mean_per_class_accuracy(all_predictions, targets)
 
-        with open(os.path.join(output_path, f"results_{str(self.label_fraction)}.json"), "w") as f:
+        with open(os.path.join(output_path, f"results_{str(label_fraction)}.json"), "w") as f:
             json.dump({
                 "top_5_accuracy": top_5_accuracy,
                 "top_1_accuracy": top_1_accuracy,
@@ -674,7 +666,6 @@ class Model():
         self.transfer_learning_batch_size = config['batch_size']
         self.transfer_learning_encoder_config_path = config['encoder_config']
         self.transfer_learning_config_path = config_path
-        self.transfer_learning_num_epochs = self.num_epochs
 
     def _load_linear_evaluation_config(self, config_path):
         config = yaml.safe_load(open(config_path, 'r'))
@@ -683,7 +674,6 @@ class Model():
         self.linear_evaluation_batch_size = config['batch_size']
         self.linear_evaluation_encoder_config_path = config['encoder_config']
         self.linear_evaluation_config_path = config_path
-        self.linear_evaluation_num_epochs = self.num_epochs
 
     def _load_train_encoder_config(self, config_path):
         config = yaml.safe_load(open(config_path, 'r'))
