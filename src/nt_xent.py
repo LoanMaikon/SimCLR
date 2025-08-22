@@ -11,19 +11,20 @@ class nt_xent(nn.Module):
     def forward(self, z1, z2):
         z1 = F.normalize(z1, dim=1)
         z2 = F.normalize(z2, dim=1)
+        batch_size = z1.shape[0]
 
-        out = torch.cat([z1, z2], dim=0)
-        n_samples = len(out)
+        z = torch.cat([z1, z2], dim=0)
+        sim = torch.matmul(z, z.T) / self.temperature
 
-        cov = torch.mm(out, out.t().contiguous())
-        sim = torch.exp(cov / self.temperature)
+        diag_mask = torch.eye(2 * batch_size, dtype=torch.bool, device=sim.device)
+        sim_masked = sim.masked_fill(diag_mask, float('-inf'))
 
-        # Negative similarity
-        mask = ~torch.eye(n_samples, device=sim.device).bool()
-        neg = sim.masked_select(mask).view(n_samples, -1).sum(dim=-1)
+        pos_idx = torch.arange(batch_size, device=sim.device)
+        pos = torch.cat([sim[pos_idx, pos_idx + batch_size], sim[pos_idx + batch_size, pos_idx]], dim=0)
 
-        # Positive similarity
-        pos = torch.exp(torch.sum(z1 * z2, dim=-1) / self.temperature)
-        pos = torch.cat([pos, pos], dim=0)
+        denom = torch.logsumexp(sim_masked, dim=1)
 
-        return -torch.log(pos / neg).mean()
+        loss = - (pos - denom).mean()
+
+        return loss
+

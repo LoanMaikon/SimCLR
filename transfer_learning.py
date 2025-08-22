@@ -56,7 +56,7 @@ def train(model, label_fraction, num_epochs, lr, weight_decay):
         for batch in model.get_train_dataloader():
             optimizer.zero_grad()
 
-            with torch.amp.autocast('cuda', dtype=torch.float16) if model.get_device().type == 'cuda' else torch.autocast('cpu'):
+            with torch.amp.autocast('cuda', dtype=torch.float16):
                 outputs, targets = model.model_infer(batch[0])
 
                 loss = model.apply_criterion(outputs, targets)
@@ -82,7 +82,7 @@ def train(model, label_fraction, num_epochs, lr, weight_decay):
                     inputs = batch[0].to(model.get_device())
                     targets = batch[1].to(model.get_device())
 
-                    with torch.amp.autocast('cuda', dtype=torch.float16) if model.get_device().type == 'cuda' else torch.autocast('cpu'):
+                    with torch.amp.autocast('cuda', dtype=torch.float16):
                         preds = model.model_infer(inputs)
                         raw_loss = model.apply_criterion(preds, targets)
 
@@ -133,7 +133,7 @@ def test(model, label_fraction, num_epochs, lr, weight_decay):
 
     with torch.no_grad():
         for batch in model.get_test_dataloader():
-            with torch.amp.autocast('cuda', dtype=torch.float16) if model.get_device().type == 'cuda' else torch.autocast('cpu'):
+            with torch.amp.autocast('cuda', dtype=torch.float16):
                 z1 = model.model_infer(batch[0])
                 targets = batch[1].to(model.get_device())
 

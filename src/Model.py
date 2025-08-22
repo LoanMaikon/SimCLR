@@ -47,8 +47,8 @@ class Model():
         self.execution_name = execution_name if execution_name is not None else None
         self.device = torch.device(f'cuda:{gpu_index}' if torch.cuda.is_available() else 'cpu') if gpu_index is not None else torch.device('cpu')
 
-        torch.set_num_threads(os.cpu_count())
-        torch.set_num_interop_threads(os.cpu_count())
+        # torch.set_num_threads(os.cpu_count())
+        # torch.set_num_interop_threads(os.cpu_count())
 
         match operation:
             case "train_encoder":

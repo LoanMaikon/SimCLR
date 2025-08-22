@@ -3,7 +3,7 @@ datasets_path: /mnt/raid1/lmk22/datasets
 train_datasets: [imagenet]
 batch_size: 512 # Paper uses 4096
 num_epochs: 100 # The paper uses 100 epochs
-lr: 0.6
+lr: 0.001
 weight_decay: 0.000001
 num_workers: 40
 prefetch_factor: 2
