@@ -156,7 +156,7 @@ class Model():
 
         match self.operation:
             case "train_encoder":
-                use_val_subset = False
+                use_val_subset = self.train_encoder_use_val_subset
             case "linear_evaluation":
                 use_val_subset = self.linear_evaluation_use_val_subset
             case "transfer_learning":
@@ -296,7 +296,7 @@ class Model():
         )
 
         self.val_dataloader = None
-        if self.transfer_learning_use_val_subset():
+        if self.transfer_learning_use_val_subset:
             val_dataset = custom_dataset(
                 operation="val",
                 apply_data_augmentation=False,
@@ -354,7 +354,7 @@ class Model():
         )
 
         self.val_dataloader = None
-        if self.linear_evaluation_use_val_subset():
+        if self.linear_evaluation_use_val_subset:
             val_dataset = custom_dataset(
                 operation="val",
                 apply_data_augmentation=False,
@@ -410,7 +410,7 @@ class Model():
             prefetch_factor=self.train_encoder_prefetch_factor,
         )
 
-        if self.train_encoder_use_val_subset():
+        if self.train_encoder_use_val_subset:
             val_dataset = custom_dataset(
                 operation="val",
                 apply_data_augmentation=True,
@@ -691,9 +691,9 @@ class Model():
         self.transfer_learning_batch_size = config['batch_size']
         self.transfer_learning_num_workers = config['num_workers']
         self.transfer_learning_prefetch_factor = config['prefetch_factor']
-        self.transfer_learning_pin_memory = True if config['pin_memory'] == "True" else False
-        self.transfer_learning_use_checkpoint = True if config['use_checkpoint'] == "True" else False
-        self.transfer_learning_use_val_subset = True if config['use_val_subset'] == "True" else False
+        self.transfer_learning_pin_memory = bool(config['pin_memory'])
+        self.transfer_learning_use_checkpoint = bool(config['use_checkpoint'])
+        self.transfer_learning_use_val_subset = bool(config['use_val_subset'])
         self.transfer_learning_config_path = config_path
 
     def _load_linear_evaluation_config(self, config_path):
@@ -703,9 +703,9 @@ class Model():
         self.linear_evaluation_batch_size = config['batch_size']
         self.linear_evaluation_num_workers = config['num_workers']
         self.linear_evaluation_prefetch_factor = config['prefetch_factor']
-        self.linear_evaluation_pin_memory = True if config['pin_memory'] == "True" else False
-        self.linear_evaluation_use_checkpoint = True if config['use_checkpoint'] == "True" else False
-        self.linear_evaluation_use_val_subset = True if config['use_val_subset'] == "True" else False
+        self.linear_evaluation_pin_memory = bool(config['pin_memory'])
+        self.linear_evaluation_use_checkpoint = bool(config['use_checkpoint'])
+        self.linear_evaluation_use_val_subset = bool(config['use_val_subset'])
         self.linear_evaluation_config_path = config_path
 
     def _load_train_encoder_config(self, config_path):
@@ -731,10 +731,10 @@ class Model():
         self.train_encoder_projection_dim = int(config['projection_dim'])
         self.train_encoder_warmup_epochs = int(config['warmup_epochs'])
         self.train_encoder_prefetch_factor = int(config['prefetch_factor'])
-        self.train_encoder_pin_memory = True if config['pin_memory'] == "True" else False
-        self.train_encoder_use_checkpoint = True if config['use_checkpoint'] == "True" else False
-        self.train_encoder_pretrained = True if config['pretrained'] == "True" else False
-        self.train_encoder_use_val_subset = True if config['use_val_subset'] == "True" else False
+        self.train_encoder_pin_memory = bool(config['pin_memory'])
+        self.train_encoder_use_checkpoint = bool(config['use_checkpoint'])
+        self.train_encoder_pretrained = bool(config['pretrained'])
+        self.train_encoder_use_val_subset = bool(config['use_val_subset'])
 
     def plot_fig(self, x, x_name, y, y_name, fig_name):
         plt.figure()

@@ -85,7 +85,7 @@ def train(model, label_fraction, num_epochs, lr, weight_decay):
         train_losses.append(epoch_train_loss)
         model.write_on_log(f"Training loss: {epoch_train_loss:.4f}")
 
-        if model.use_val_subset():
+        if model.get_use_val_subset():
             model.model_to_eval()
             epoch_val_loss_sum = 0.0
             total_val_samples = 0
@@ -108,9 +108,9 @@ def train(model, label_fraction, num_epochs, lr, weight_decay):
                     epoch_val_loss_sum += raw_loss.item() * batch_size
                     total_val_samples += batch_size
 
-            epoch_val_loss = (epoch_val_loss_sum / total_val_samples) if total_val_samples > 0 else 0.0
+            epoch_val_loss = (epoch_val_loss_sum / total_val_samples)
             val_losses.append(epoch_val_loss)
-            val_accs.append(correct_val_samples / total_val_samples if total_val_samples > 0 else 0.0)
+            val_accs.append(correct_val_samples / total_val_samples)
             model.write_on_log(f"Validation loss: {epoch_val_loss:.4f}")
             model.write_on_log(f"Validation accuracy: {correct_val_samples / total_val_samples:.4f}")
 
@@ -131,16 +131,16 @@ def train(model, label_fraction, num_epochs, lr, weight_decay):
             x_name="Epochs",
             y=train_losses,
             y_name="Train Loss",
-            fig_name=f"train_loss_lf_{label_fraction}_ne_{num_epochs}_lr_{lr}_wd_{weight_decay}.png"
+            fig_name=f"train_loss_lf_{label_fraction}_ne_{num_epochs}_lr_{lr}_wd_{weight_decay}"
         )
 
-        if model.use_val_subset():
+        if model.get_use_val_subset():
             model.plot_fig(
                 x=range(1, len(val_losses) + 1),
                 x_name="Epochs",
                 y=val_losses,
                 y_name="Val Loss",
-                fig_name=f"val_loss_lf_{label_fraction}_ne_{num_epochs}_lr_{lr}_wd_{weight_decay}.png"
+                fig_name=f"val_loss_lf_{label_fraction}_ne_{num_epochs}_lr_{lr}_wd_{weight_decay}"
             )
 
             model.plot_fig(
@@ -148,7 +148,7 @@ def train(model, label_fraction, num_epochs, lr, weight_decay):
                 x_name="Epochs",
                 y=val_accs,
                 y_name="Val Accuracy",
-                fig_name=f"val_acc_lf_{label_fraction}_ne_{num_epochs}_lr_{lr}_wd_{weight_decay}.png"
+                fig_name=f"val_acc_lf_{label_fraction}_ne_{num_epochs}_lr_{lr}_wd_{weight_decay}"
             )
 
 def test(model, label_fraction, num_epochs, lr, weight_decay):
@@ -160,6 +160,7 @@ def test(model, label_fraction, num_epochs, lr, weight_decay):
     all_predictions = []
 
     test_loss = 0.0
+    total_test_samples = 0
     criterion = torch.nn.CrossEntropyLoss()
 
     with torch.no_grad():
@@ -170,7 +171,10 @@ def test(model, label_fraction, num_epochs, lr, weight_decay):
 
                 output = nn.functional.softmax(z1, dim=1)
                 loss = criterion(z1, targets)
-            test_loss += loss.item() * batch[0].size(0)
+            
+            batch_size = batch[0].size(0)
+            test_loss += loss.item() * batch_size
+            total_test_samples += batch_size
 
             all_targets.extend(targets.cpu().numpy())
             all_predictions.extend(output.cpu().numpy())
@@ -178,7 +182,7 @@ def test(model, label_fraction, num_epochs, lr, weight_decay):
     model.save_results(
         targets=all_targets,
         all_predictions=all_predictions,
-        loss=test_loss / len(model.get_test_dataloader()),
+        loss=test_loss / total_test_samples,
         json_name=f"results_lb_{label_fraction}_ne_{num_epochs}_lr_{lr}_wd_{weight_decay}.json"
     )
 

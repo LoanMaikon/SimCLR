@@ -62,7 +62,7 @@ def train(model):
         train_losses.append(epoch_train_loss)
         model.write_on_log(f"Training loss: {epoch_train_loss:.4f}")
 
-        if model.use_val_subset():
+        if model.get_use_val_subset():
             model.model_to_eval()
 
             val_loss = 0.0
@@ -71,7 +71,7 @@ def train(model):
             correct_val_samples = 0
 
             with torch.no_grad():
-                for batch in model.get_validation_dataloader():
+                for batch in model.get_val_dataloader():
                     with torch.amp.autocast('cuda', dtype=torch.float16):
                         z1, z2 = model.model_infer(batch[0], batch[1])
                         loss = model.apply_criterion(z1, z2)
@@ -86,6 +86,9 @@ def train(model):
 
             val_loss /= total_val_samples
             val_acc = correct_val_samples / total_val_preds
+
+            val_losses.append(val_loss)
+            val_accs.append(val_acc)
 
             model.write_on_log(f"Validation loss: {val_loss:.4f}")
             model.write_on_log(f"Validation accuracy: {val_acc:.4f}")
@@ -110,16 +113,16 @@ def train(model):
             x_name="Epochs",
             y=train_losses,
             y_name="Training Loss",
-            fig_name="train_loss.png"
+            fig_name="train_loss"
         )
 
-        if model.has_validation_set():
+        if model.get_use_val_subset():
             model.plot_fig(
                 x=range(1, len(val_losses) + 1),
                 x_name="Epochs",
                 y=val_losses,
                 y_name="Validation Loss",
-                fig_name="val_loss.png"
+                fig_name="val_loss"
             )
 
             model.plot_fig(
@@ -127,7 +130,7 @@ def train(model):
                 x_name="Epochs",
                 y=val_accs,
                 y_name="Validation Accuracy",
-                fig_name="val_acc.png"
+                fig_name="val_acc"
             )
 
         model.plot_fig(
@@ -135,7 +138,7 @@ def train(model):
             x_name="Epochs",
             y=lrs,
             y_name="Learning Rate",
-            fig_name="lr.png"
+            fig_name="lr"
         )
 
 def _get_prediction_and_target(z1, z2, device=None):
