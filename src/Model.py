@@ -80,7 +80,7 @@ class Model():
                 self._load_linear_evaluation_config(config_path)
                 self._load_train_encoder_config(encoder_config)
 
-                self._create_linear_evaluation_output_path()
+                self._create_linear_evaluation_output_path(encoder_config)
 
                 self._load_backbone()
                 self._load_encoder_weight()
@@ -107,7 +107,7 @@ class Model():
                 self._load_transfer_learning_config(config_path)
                 self._load_train_encoder_config(encoder_config)
 
-                self._create_transfer_learning_output_path()
+                self._create_transfer_learning_output_path(encoder_config)
 
                 self._load_backbone()
                 self._load_encoder_weight()
@@ -122,7 +122,7 @@ class Model():
                 self._load_transfer_learning_dataloaders()
 
                 self._load_transfer_learning_criterion()
-                self._load_transfer_learning_optimizer(lr=lr, weight_decay=weight_decay)
+                self._load_transfer_learning_optimizer()
 
     def get_transfer_learning_num_epochs(self):
         return self.transfer_learning_num_epochs
@@ -151,19 +151,40 @@ class Model():
     def get_criterion(self):
         return self.criterion
     
+    def get_use_val_subset(self):
+        use_val_subset = None
+
+        match self.operation:
+            case "train_encoder":
+                use_val_subset = False
+            case "linear_evaluation":
+                use_val_subset = self.linear_evaluation_use_val_subset
+            case "transfer_learning":
+                use_val_subset = self.transfer_learning_use_val_subset
+        
+        return use_val_subset
+    
     '''
     Check if the dataset has a validation set
     We use the validation set of imagenet to test
     '''
     def has_validation_set(self):
+        use_val_subset = None
         set = None
+
         match self.operation:
             case "train_encoder":
                 set = self.train_encoder_train_datasets
+                use_val_subset = self.train_encoder_use_val_subset
             case "linear_evaluation":
                 set = self.linear_evaluation_train_datasets
+                use_val_subset = self.linear_evaluation_use_val_subset
             case "transfer_learning":
                 set = self.transfer_learning_train_datasets
+                use_val_subset = self.transfer_learning_use_val_subset
+        
+        if use_val_subset is not None and use_val_subset:
+            return True
         
         for s in set:
             if s in ['imagenet', 'tiny-imagenet', 'caltech-101', 'cifar10', 'cifar100', 'food-101', 'stanford-cars', 'oxford-pets']:
@@ -200,10 +221,10 @@ class Model():
         self.scheduler = torch.optim.lr_scheduler.LambdaLR(self.optimizer, lr_lambda=__lr_lambda)
 
     def _load_transfer_learning_optimizer(self):
-        self.optimizer = optim.AdamW(self.model.parameters(), lr=self.transfer_learning_lr, weight_decay=self.transfer_learning_weight_decay)
+        self.optimizer = optim.SGD(self.model.parameters(), lr=self.transfer_learning_lr, momentum=0.9, weight_decay=self.transfer_learning_weight_decay, nesterov=True)
 
     def _load_linear_evaluation_optimizer(self):
-        self.optimizer = optim.AdamW(self.model.parameters(), lr=self.linear_evaluation_lr, weight_decay=self.linear_evaluation_weight_decay)
+        self.optimizer = optim.SGD(self.model.parameters(), lr=self.linear_evaluation_lr, momentum=0.9, weight_decay=self.linear_evaluation_weight_decay, nesterov=True)
 
     def _load_train_encoder_optimizer(self):
         self.optimizer = optim.AdamW(self.model.parameters(), lr=self.train_encoder_lr, weight_decay=self.train_encoder_weight_decay)
@@ -261,7 +282,8 @@ class Model():
             datasets=self.transfer_learning_train_datasets,
             datasets_folder_path=self.train_encoder_datasets_path,
             transform=self.transfer_learning_transform_train,
-            label_fraction=self.transfer_learning_label_fraction
+            label_fraction=self.transfer_learning_label_fraction,
+            use_val_subset=self.transfer_learning_use_val_subset,
         )
 
         self.train_dataloader = torch.utils.data.DataLoader(
@@ -274,13 +296,14 @@ class Model():
         )
 
         self.val_dataloader = None
-        if self.has_validation_set():
+        if self.transfer_learning_use_val_subset():
             val_dataset = custom_dataset(
                 operation="val",
                 apply_data_augmentation=False,
                 datasets=self.transfer_learning_train_datasets,
                 datasets_folder_path=self.train_encoder_datasets_path,
                 transform=self.transfer_learning_transform_val_test,
+                use_val_subset=self.transfer_learning_use_val_subset,
             )
 
             self.val_dataloader = torch.utils.data.DataLoader(
@@ -297,7 +320,8 @@ class Model():
             apply_data_augmentation=False,
             datasets=self.transfer_learning_train_datasets,
             datasets_folder_path=self.train_encoder_datasets_path,
-            transform=self.transfer_learning_transform_val_test
+            transform=self.transfer_learning_transform_val_test,
+            use_val_subset=self.transfer_learning_use_val_subset,
         )
 
         self.test_dataloader = torch.utils.data.DataLoader(
@@ -316,7 +340,8 @@ class Model():
             datasets=self.linear_evaluation_train_datasets,
             datasets_folder_path=self.train_encoder_datasets_path,
             transform=self.linear_evaluation_transform_train,
-            label_fraction=self.linear_evaluation_label_fraction
+            label_fraction=self.linear_evaluation_label_fraction,
+            use_val_subset=self.linear_evaluation_use_val_subset,
         )
 
         self.train_dataloader = torch.utils.data.DataLoader(
@@ -329,13 +354,14 @@ class Model():
         )
 
         self.val_dataloader = None
-        if self.has_validation_set():
+        if self.linear_evaluation_use_val_subset():
             val_dataset = custom_dataset(
                 operation="val",
                 apply_data_augmentation=False,
                 datasets=self.linear_evaluation_train_datasets,
                 datasets_folder_path=self.train_encoder_datasets_path,
                 transform=self.linear_evaluation_transform_val_test,
+                use_val_subset=self.linear_evaluation_use_val_subset,
             )
 
             self.val_dataloader = torch.utils.data.DataLoader(
@@ -352,7 +378,8 @@ class Model():
             apply_data_augmentation=False,
             datasets=self.linear_evaluation_train_datasets,
             datasets_folder_path=self.train_encoder_datasets_path,
-            transform=self.linear_evaluation_transform_val_test
+            transform=self.linear_evaluation_transform_val_test,
+            use_val_subset=self.linear_evaluation_use_val_subset,
         )
 
         self.test_dataloader = torch.utils.data.DataLoader(
@@ -370,7 +397,8 @@ class Model():
             apply_data_augmentation=True,
             datasets=self.train_encoder_train_datasets,
             datasets_folder_path=self.train_encoder_datasets_path,
-            transform=self.transform
+            transform=self.transform,
+            use_val_subset= self.train_encoder_use_val_subset,
         )
 
         self.train_dataloader = torch.utils.data.DataLoader(
@@ -382,13 +410,14 @@ class Model():
             prefetch_factor=self.train_encoder_prefetch_factor,
         )
 
-        if self.has_validation_set():
+        if self.train_encoder_use_val_subset():
             val_dataset = custom_dataset(
                 operation="val",
                 apply_data_augmentation=True,
                 datasets=self.train_encoder_train_datasets,
                 datasets_folder_path=self.train_encoder_datasets_path,
                 transform=self.transform,
+                use_val_subset=self.train_encoder_use_val_subset
             )
 
             self.val_dataloader = torch.utils.data.DataLoader(
@@ -451,7 +480,7 @@ class Model():
             v2.Normalize(mean=self.mean, std=self.std)
         ])
 
-    def save_results(self, targets, all_predictions, json_name):
+    def save_results(self, targets, all_predictions, loss, json_name):
         def _compute_top_accuracy(all_predictions, targets, top_k=1):
             correct = 0
             total = 0
@@ -499,6 +528,7 @@ class Model():
                 "top_5_accuracy": top_5_accuracy,
                 "top_1_accuracy": top_1_accuracy,
                 "mean_per_class_accuracy": mean_per_class_accuracy,
+                "loss": loss,
             }, f, indent=4)
 
     def _load_normalization(self):
@@ -619,22 +649,23 @@ class Model():
     def _remove_projection_head(self):
         self.model.remove_projection_head()
 
-    def _create_transfer_learning_output_path(self):
+    def _create_transfer_learning_output_path(self, encoder_config):
         datasets_str = "_".join(self.transfer_learning_train_datasets)
 
         self.transfer_learning_output_path = self.train_encoder_output_path + f"{self.execution_name}/transfer_learning_{datasets_str}/lf_{self.transfer_learning_label_fraction}_ne_{self.transfer_learning_num_epochs}_lr_{self.transfer_learning_lr}_wd_{self.transfer_learning_weight_decay}/"
 
         os.makedirs(self.transfer_learning_output_path, exist_ok=True)
-        shutil.copyfile(self.transfer_learning_encoder_config_path, os.path.join(self.transfer_learning_output_path, "encoder_config.yaml"))
+        shutil.copyfile(encoder_config, os.path.join(self.transfer_learning_output_path, "encoder_config.yaml"))
         shutil.copyfile(self.transfer_learning_config_path, os.path.join(self.transfer_learning_output_path, "config.yaml"))
 
-    def _create_linear_evaluation_output_path(self):
+    def _create_linear_evaluation_output_path(self, encoder_config):
         datasets_str = "_".join(self.linear_evaluation_train_datasets)
 
-        self.linear_evaluation_output_path = self.train_encoder_output_path + f"{self.execution_name}/linear_evaluation_{datasets_str}/lf_{self.linear_evaluation_label_fraction}_ne_{self.linear_evaluation_num_epochs}_lr_{self.linear_evaluation_lr}_wd_{self.linear_evaluation_weight_decay}/"
+        self.linear_evaluation_output_path = self.train_encoder_output_path + f"{self.execution_name}/linear_evaluation_{datasets_str}/lf_{self.linear_evaluation_label_fraction}_ne_{self.linear_evaluation_num_epochs}_lr_{self.linear_evaluation_lr}_wd_{self.linear_evaluation_weight_decay}"
+        self.linear_evaluation_output_path += "_val_subset/" if self.linear_evaluation_use_val_subset else "/"
 
         os.makedirs(self.linear_evaluation_output_path, exist_ok=True)
-        shutil.copyfile(self.linear_evaluation_encoder_config_path, os.path.join(self.linear_evaluation_output_path, "encoder_config.yaml"))
+        shutil.copyfile(encoder_config, os.path.join(self.linear_evaluation_output_path, "encoder_config.yaml"))
         shutil.copyfile(self.linear_evaluation_config_path, os.path.join(self.linear_evaluation_output_path, "config.yaml"))
 
     def _create_train_encoder_output_path(self, config_path):
@@ -647,7 +678,7 @@ class Model():
             if f"execution_{i}" not in executions:
                 config['output_path'] += f"/execution_{i}"
                 break
-        config['output_path'] += f'/{self.operation}' if not config['output_path'].endswith('/') else f'{self.operation}'
+        config['output_path'] += f'/{self.operation}/' if not config['output_path'].endswith('/') else f'/{self.operation}/'
         self.train_encoder_output_path = str(config['output_path'])
 
         os.makedirs(self.train_encoder_output_path, exist_ok=True)
@@ -658,11 +689,11 @@ class Model():
 
         self.transfer_learning_train_datasets = config['train_datasets']
         self.transfer_learning_batch_size = config['batch_size']
-        self.transfer_learning_encoder_config_path = config['encoder_config']
         self.transfer_learning_num_workers = config['num_workers']
         self.transfer_learning_prefetch_factor = config['prefetch_factor']
         self.transfer_learning_pin_memory = True if config['pin_memory'] == "True" else False
         self.transfer_learning_use_checkpoint = True if config['use_checkpoint'] == "True" else False
+        self.transfer_learning_use_val_subset = True if config['use_val_subset'] == "True" else False
         self.transfer_learning_config_path = config_path
 
     def _load_linear_evaluation_config(self, config_path):
@@ -670,11 +701,11 @@ class Model():
 
         self.linear_evaluation_train_datasets = config['train_datasets']
         self.linear_evaluation_batch_size = config['batch_size']
-        self.linear_evaluation_encoder_config_path = config['encoder_config']
         self.linear_evaluation_num_workers = config['num_workers']
         self.linear_evaluation_prefetch_factor = config['prefetch_factor']
         self.linear_evaluation_pin_memory = True if config['pin_memory'] == "True" else False
         self.linear_evaluation_use_checkpoint = True if config['use_checkpoint'] == "True" else False
+        self.linear_evaluation_use_val_subset = True if config['use_val_subset'] == "True" else False
         self.linear_evaluation_config_path = config_path
 
     def _load_train_encoder_config(self, config_path):
@@ -703,6 +734,7 @@ class Model():
         self.train_encoder_pin_memory = True if config['pin_memory'] == "True" else False
         self.train_encoder_use_checkpoint = True if config['use_checkpoint'] == "True" else False
         self.train_encoder_pretrained = True if config['pretrained'] == "True" else False
+        self.train_encoder_use_val_subset = True if config['use_val_subset'] == "True" else False
 
     def plot_fig(self, x, x_name, y, y_name, fig_name):
         plt.figure()

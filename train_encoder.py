@@ -27,6 +27,7 @@ def train(model):
 
     train_losses = []
     val_losses = []
+    val_accs = []
     lrs = []
 
     scaler = torch.amp.GradScaler()
@@ -40,6 +41,7 @@ def train(model):
         model.model_to_train()
         
         epoch_train_loss = 0.0
+        epoch_train_samples = 0
 
         for batch in model.get_train_dataloader():
             model.get_optimizer().zero_grad()
@@ -53,27 +55,40 @@ def train(model):
 
             scaler.update()
 
-            epoch_train_loss += loss.item()
+            epoch_train_loss += loss.item() * batch[0].size(0)
+            epoch_train_samples += batch[0].size(0)
 
-        epoch_train_loss /= len(model.get_train_dataloader())
+        epoch_train_loss /= epoch_train_samples
         train_losses.append(epoch_train_loss)
         model.write_on_log(f"Training loss: {epoch_train_loss:.4f}")
 
-        if model.has_validation_set():
+        if model.use_val_subset():
             model.model_to_eval()
 
             val_loss = 0.0
+            total_val_samples = 0
+            total_val_preds = 0
+            correct_val_samples = 0
+
             with torch.no_grad():
                 for batch in model.get_validation_dataloader():
-
                     with torch.amp.autocast('cuda', dtype=torch.float16):
                         z1, z2 = model.model_infer(batch[0], batch[1])
                         loss = model.apply_criterion(z1, z2)
-                    val_loss += loss.item()
 
-            val_loss /= len(model.get_validation_dataloader())
-            val_losses.append(val_loss)
+                    predicted, targets = _get_prediction_and_target(z1, z2, model.get_device())
+
+                    val_loss += loss.item() * batch[0].size(0)
+                    total_val_samples += batch[0].size(0)
+
+                    correct_val_samples += (predicted == targets).sum().item()
+                    total_val_preds += predicted.size(0)
+
+            val_loss /= total_val_samples
+            val_acc = correct_val_samples / total_val_preds
+
             model.write_on_log(f"Validation loss: {val_loss:.4f}")
+            model.write_on_log(f"Validation accuracy: {val_acc:.4f}")
 
             if val_loss < best_val_loss:
                 model.write_on_log(f"Validation loss improved from {best_val_loss:.4f} to {val_loss:.4f}. Saving model...")
@@ -107,6 +122,14 @@ def train(model):
                 fig_name="val_loss.png"
             )
 
+            model.plot_fig(
+                x=range(1, len(val_accs) + 1),
+                x_name="Epochs",
+                y=val_accs,
+                y_name="Validation Accuracy",
+                fig_name="val_acc.png"
+            )
+
         model.plot_fig(
             x=range(1, len(lrs) + 1),
             x_name="Epochs",
@@ -114,6 +137,29 @@ def train(model):
             y_name="Learning Rate",
             fig_name="lr.png"
         )
+
+def _get_prediction_and_target(z1, z2, device=None):
+    z1_cpu = z1.detach().cpu()
+    z2_cpu = z2.detach().cpu()
+
+    z1_cpu = torch.nn.functional.normalize(z1_cpu, dim=1)
+    z2_cpu = torch.nn.functional.normalize(z2_cpu, dim=1)
+
+    batch_size = z1_cpu.size(0)
+
+    sim = torch.matmul(z1_cpu, z2_cpu.T)
+
+    # For each z1, find the most similar z2 and vice-versa
+    pred_1_to_2 = sim.argmax(dim=1)
+    pred_2_to_1 = sim.T.argmax(dim=1)
+
+    targets = torch.arange(batch_size, dtype=torch.long)
+
+    predicted = torch.cat([pred_1_to_2, pred_2_to_1], dim=0)
+    targets = torch.cat([targets, targets], dim=0)
+
+    return predicted, targets
+
 
 def get_args():
     parser = argparse.ArgumentParser()

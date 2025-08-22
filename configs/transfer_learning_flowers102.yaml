@@ -1,10 +1,11 @@
 train_datasets: [flowers-102]
-batch_size: 512
+batch_size: 256
 label_fractions: [0.01, 0.1, 1.0]
 num_epochs: [60, 30, 10]
-lr: [0.1, 0.1, 0.1]
+lr: [0.05, 0.05, 0.05]
 weight_decay: [0.000001, 0.000001, 0.000001]
 num_workers: 40
 prefetch_factor: 2
 pin_memory: False # Set to True if you have enough memory. Larger datasets will not benefit from this
 use_checkpoint: True # Recommended for memory efficiency
+use_val_subset: False # Set to True if you want to test hyperparameters on a validation subset

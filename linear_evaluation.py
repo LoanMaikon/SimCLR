@@ -16,10 +16,12 @@ def main():
     args = get_args()
     executions_names = get_executions_names(args.train_dir)
 
+    label_fractions_list, num_epochs_list, lr_list, weight_decay_list = get_hyperparameters_from_config(args.config)
+
     for execution_name in executions_names:
         encoder_config = _get_encoder_config_path_by_execution_name(args.train_dir, execution_name)
 
-        for label_fraction, num_epochs, lr, weight_decay in zip(args.label_fractions, args.num_epochs, args.lrs, args.weight_decays):
+        for label_fraction, num_epochs, lr, weight_decay in zip(label_fractions_list, num_epochs_list, lr_list, weight_decay_list):
             model = Model(config_path=args.config,
                           gpu_index=args.gpu,
                           operation="linear_evaluation",
@@ -49,6 +51,7 @@ def train(model, label_fraction, num_epochs, lr, weight_decay):
 
     train_losses = []
     val_losses = []
+    val_accs = []
     lrs = []
 
     for epoch in range(model.get_linear_evaluation_num_epochs()):
@@ -56,6 +59,8 @@ def train(model, label_fraction, num_epochs, lr, weight_decay):
         model.write_on_log(f"Epoch {epoch + 1}/{model.get_linear_evaluation_num_epochs()}")
 
         model.model_to_train()
+
+        total_train_samples = 0
         
         epoch_train_loss = 0.0
         for batch in model.get_train_dataloader():
@@ -70,16 +75,20 @@ def train(model, label_fraction, num_epochs, lr, weight_decay):
             scaler.step(model.get_optimizer())
             scaler.update()
 
-            epoch_train_loss += loss.item()
+            epoch_train_loss += loss.item() * batch[0].size(0)
+            total_train_samples += batch[0].size(0)
 
-        epoch_train_loss /= len(model.get_train_dataloader())
+        epoch_train_loss /= total_train_samples
         train_losses.append(epoch_train_loss)
         model.write_on_log(f"Training loss: {epoch_train_loss:.4f}")
 
-        if model.has_validation_set():
+        if model.use_val_subset():
             model.model_to_eval()
 
             epoch_val_loss = 0.0
+            total_val_samples = 0
+            correct_val_samples = 0
+
             with torch.no_grad():
                 for batch in model.get_val_dataloader():
                     with torch.amp.autocast('cuda', dtype=torch.float16):
@@ -87,11 +96,17 @@ def train(model, label_fraction, num_epochs, lr, weight_decay):
                         targets = batch[1].to(model.get_device())
                         loss = model.apply_criterion(z1, targets)
 
-                    epoch_val_loss += loss.item()
-            
-            epoch_val_loss /= len(model.get_val_dataloader())
+                    outputs = nn.functional.softmax(z1, dim=1)
+                    _, predicted = torch.max(outputs, 1)
+                    correct_val_samples += (predicted == targets).sum().item()
+
+                    epoch_val_loss += loss.item() * batch[0].size(0)
+                    total_val_samples += batch[0].size(0)
+
+            epoch_val_loss /= total_val_samples if total_val_samples > 0 else 1
             val_losses.append(epoch_val_loss)
             model.write_on_log(f"Validation loss: {epoch_val_loss:.4f}")
+            model.write_on_log(f"Validation accuracy: {correct_val_samples / total_val_samples:.4f}")
 
             if epoch_val_loss < best_val_loss:
                 model.write_on_log(f"Validation loss improved from {best_val_loss:.4f} to {epoch_val_loss:.4f}. Saving model...")
@@ -114,13 +129,21 @@ def train(model, label_fraction, num_epochs, lr, weight_decay):
             fig_name=f"train_loss_lf_{label_fraction}_ne_{num_epochs}_lr_{lr}_wd_{weight_decay}.png"
         )
 
-        if model.has_validation_set():
+        if model.use_val_subset():
             model.plot_fig(
                 x=range(1, len(val_losses) + 1),
                 x_name="Epochs",
                 y=val_losses,
                 y_name="Validation Loss",
                 fig_name=f"val_loss_lf_{label_fraction}_ne_{num_epochs}_lr_{lr}_wd_{weight_decay}.png"
+            )
+
+            model.plot_fig(
+                x=range(1, len(val_accs) + 1),
+                x_name="Epochs",
+                y=val_accs,
+                y_name="Validation Accuracy",
+                fig_name=f"val_acc_lf_{label_fraction}_ne_{num_epochs}_lr_{lr}_wd_{weight_decay}.png"
             )
 
 def test(model, label_fraction, num_epochs, lr, weight_decay):
@@ -131,11 +154,16 @@ def test(model, label_fraction, num_epochs, lr, weight_decay):
     all_targets = []
     all_predictions = []
 
+    test_loss = 0.0
+    criterion = torch.nn.CrossEntropyLoss()
+
     with torch.no_grad():
         for batch in model.get_test_dataloader():
             with torch.amp.autocast('cuda', dtype=torch.float16):
                 z1 = model.model_infer(batch[0])
                 targets = batch[1].to(model.get_device())
+                loss = criterion(z1, targets)
+            test_loss += loss.item()
 
             output = nn.functional.softmax(z1, dim=1)
 
@@ -145,6 +173,7 @@ def test(model, label_fraction, num_epochs, lr, weight_decay):
     model.save_results(
         targets=all_targets,
         all_predictions=all_predictions,
+        loss=test_loss / len(model.get_test_dataloader()),
         json_name=f"results_lb_{label_fraction}_ne_{num_epochs}_lr_{lr}_wd_{weight_decay}.json"
     )
 
@@ -155,6 +184,17 @@ def get_executions_names(train_dir):
 
 def _get_encoder_config_path_by_execution_name(train_dir, execution_name):
     return f"{train_dir}/{execution_name}/train_encoder/config.yaml"
+
+def get_hyperparameters_from_config(config_path):
+    with open(config_path, 'r') as file:
+        config = yaml.safe_load(file)
+
+    label_fractions = config.get('label_fractions')
+    num_epochs = config.get('num_epochs')
+    lr = config.get('lr')
+    weight_decay = config.get('weight_decay')
+
+    return label_fractions, num_epochs, lr, weight_decay
 
 def get_args():
     parser = argparse.ArgumentParser(description="Linear Evaluation Training")

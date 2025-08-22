@@ -7,13 +7,15 @@ from random import shuffle
 import torchvision.transforms as v2
 import scipy.io
 
+VAL_SUBSET_FRACTION = 0.1
 
 '''
 apply_data_augmentation: if True, the dataset will return two augmented versions of the same image. Else, it will return the original image with preprocessing
 label_fraction: if not None, the dataset will return only a fraction of the labels, used for linear evaluation and transfer learning
+use_val_subset: if True, the dataset will use a validation subset, if available. Else, it will use VAL_SUBSET_FRACTION to split the training set into training and validation sets
 '''
 class custom_dataset(Dataset):
-    def __init__(self, operation, apply_data_augmentation, datasets, datasets_folder_path, transform, label_fraction=None):
+    def __init__(self, operation, apply_data_augmentation, datasets, datasets_folder_path, transform, label_fraction=None, use_val_subset=False):
         if operation not in ["train", "val", "test"]:
             raise ValueError("Operation must be 'train', 'val', or 'test'.")
         
@@ -21,6 +23,7 @@ class custom_dataset(Dataset):
         self.apply_data_augmentation = apply_data_augmentation
         self.transform = transform
         self.label_fraction = label_fraction
+        self.use_val_subset = use_val_subset
 
         self.images = []
         self.labels = []
@@ -30,23 +33,35 @@ class custom_dataset(Dataset):
 
             match dataset:
                 case 'cifar100' | 'cifar10':
-                    # Don't have a validation set
-                    assert operation in ["train", "test"], "CIFAR datasets only have train and test splits"
-
+                    if not self.use_val_subset and self.operation == "val":
+                        raise ValueError("CIFAR-10/100 has only train and test configs, no validation set available")
+                    
                     classes = sorted(os.listdir(dataset_path + "train/"))
                     images_per_class = {}
                     for class_idx, _class in enumerate(classes):
                         images_per_class[_class] = []
+
+                        train_images = sorted(glob(dataset_path + "train/" + _class + "/*.png"))
+                        test_images = sorted(glob(dataset_path + "test/" + _class + "/*.png"))
+
+                        if self.use_val_subset:
+                            n_val_images = ceil(len(train_images) * VAL_SUBSET_FRACTION)
+                            val_images = train_images[-n_val_images:]
+                            train_images = train_images[:-n_val_images]
                         
                         match self.operation:
                             case "train":
-                                images_per_class[_class].extend(glob(dataset_path + "train/" + _class + "/*.png"))
-                                images_per_class[_class] = sorted(images_per_class[_class])
+                                self.images.extend(train_images)
+                                self.labels.extend([class_idx] * len(train_images))
+                            case "val":
+                                if self.use_val_subset:
+                                    self.images.extend(val_images)
+                                    self.labels.extend([class_idx] * len(val_images))
+                                else:
+                                    raise ValueError("CIFAR-10/100 has only train and test configs, no validation set available")
                             case "test":
-                                images_per_class[_class].extend(glob(dataset_path + "test/" + _class + "/*.png"))
-
-                        self.images.extend(images_per_class[_class])
-                        self.labels.extend([class_idx] * len(images_per_class[_class]))
+                                self.images.extend(test_images)
+                                self.labels.extend([class_idx] * len(test_images))
 
                 case 'dtd':
                     labels_path = dataset_path + "dtd/dtd/labels/"
@@ -91,6 +106,9 @@ class custom_dataset(Dataset):
                                 self.labels.append(class_id)
 
                 case 'fgvc-aircraft':
+                    if not self.use_val_subset and self.operation == "val":
+                        raise ValueError("FGVC Aircraft has only train and test configs, no validation set available")
+                    
                     _images = glob(dataset_path + "fgvc-aircraft-2013b/data/images/*.jpg")
                     test_classes_file = f"{dataset_path}fgvc-aircraft-2013b/data/images_variant_test.txt"
                     trainval_classes_file = f"{dataset_path}fgvc-aircraft-2013b/data/images_variant_trainval.txt"
@@ -184,9 +202,6 @@ class custom_dataset(Dataset):
                             self.labels.append(class_label)
 
                 case 'food-101':
-                    # Don't have a validation set
-                    assert operation in ["train", "test"], "Food-101 dataset only has train and test splits"
-
                     classes_path = open(f"{dataset_path}food-101/food-101/meta/classes.txt", "r")
                     classes = []
                     for line in classes_path:
@@ -224,19 +239,27 @@ class custom_dataset(Dataset):
                                 train_images.append(image)
                             elif image_to_split.get(image_name) == "test":
                                 test_images.append(image)
+                        
+                        if self.use_val_subset:
+                            n_val_images = ceil(len(train_images) * VAL_SUBSET_FRACTION)
+                            val_images = train_images[-n_val_images:]
+                            train_images = train_images[:-n_val_images]
 
                         match self.operation:
                             case "train":
                                 self.images.extend(train_images)
                                 self.labels.extend([class_to_id[_class]] * len(train_images))
+                            case "val":
+                                self.images.extend(val_images)
+                                self.labels.extend([class_to_id[_class]] * len(val_images))
                             case "test":
                                 self.images.extend(test_images)
                                 self.labels.extend([class_to_id[_class]] * len(test_images))
 
                 case 'oxford-pets':
-                    # Don't have a validation set
-                    assert operation in ["train", "test"], "Oxford Pets dataset only has train and test splits"
-
+                    if not self.use_val_subset and self.operation == "val":
+                        raise ValueError("Oxford Pets has only train and test configs, no validation set available")
+                
                     test_file = open(f"{dataset_path}oxford-iiit-pet/annotations/test.txt", "r")
                     trainval_file = open(f"{dataset_path}oxford-iiit-pet/annotations/trainval.txt", "r")
 
@@ -287,19 +310,30 @@ class custom_dataset(Dataset):
                                 train_images.append(image)
                             elif image_to_split.get(image_name) == "test":
                                 test_images.append(image)
+                        
+                        if self.use_val_subset:
+                            n_val_images = ceil(len(train_images) * VAL_SUBSET_FRACTION)
+                            val_images = train_images[-n_val_images:]
+                            train_images = train_images[:-n_val_images]
 
                         match self.operation:
                             case "train":
                                 self.images.extend(train_images)
                                 self.labels.extend([class_to_id[_class]] * len(train_images))
+                            case "val":
+                                if self.use_val_subset:
+                                    self.images.extend(val_images)
+                                    self.labels.extend([class_to_id[_class]] * len(val_images))
+                                else:
+                                    raise ValueError("Oxford Pets has only train and test configs, no validation set available")
                             case "test":
                                 self.images.extend(test_images)
                                 self.labels.extend([class_to_id[_class]] * len(test_images))
 
                 case 'stanford-cars':
-                    # Don't have a validation set
-                    assert operation in ["train", "test"], "Stanford Cars dataset only has train and test splits"
-
+                    if not self.use_val_subset and self.operation == "val":
+                        raise ValueError("Stanford Cars has only train and test configs, no validation set available")
+                    
                     train_annos = f"{dataset_path}/car_devkit/devkit/cars_train_annos.mat"
                     test_annos = f"{dataset_path}/car_devkit/devkit/cars_test_annos.mat"
                     train_images_path = f"{dataset_path}/cars_train/cars_train"
@@ -345,18 +379,36 @@ class custom_dataset(Dataset):
                         if class_name not in test_images_per_class:
                             test_images_per_class[class_name] = []
                         test_images_per_class[class_name].append(image)
+                    
+                    if self.use_val_subset:
+                        val_images_per_class = {}
+                        for _class in train_images_per_class:
+                            n_val_images = ceil(len(train_images_per_class[_class]) * VAL_SUBSET_FRACTION)
+                            
+                            val_images_per_class[_class] = train_images_per_class[_class][-n_val_images:]
+                            train_images_per_class[_class] = train_images_per_class[_class][:-n_val_images]                        
 
                     match self.operation:
                         case "train":
                             for _class in train_images_per_class:
                                 self.images.extend(train_images_per_class[_class])
                                 self.labels.extend([int(_class) - 1] * len(train_images_per_class[_class]))
+                        case "val":
+                            if self.use_val_subset:
+                                for _class in val_images_per_class:
+                                    self.images.extend(val_images_per_class[_class])
+                                    self.labels.extend([int(_class) - 1] * len(val_images_per_class[_class]))
+                            else:
+                                raise ValueError("Stanford Cars has only train and test configs, no validation set available")
                         case "test":
                             for _class in test_images_per_class:
                                 self.images.extend(test_images_per_class[_class])
                                 self.labels.extend([int(_class) - 1] * len(test_images_per_class[_class]))
 
                 case 'caltech-101':
+                    if not self.use_val_subset and self.operation == "val":
+                        raise ValueError("Caltech-101 has only train and test configs, no validation set available")
+                    
                     # SimCLR uses 30 images per class for training
                     images_path = dataset_path + "caltech-101/101_ObjectCategories/"
                     classes = sorted(os.listdir(images_path))
@@ -376,17 +428,31 @@ class custom_dataset(Dataset):
                         train_labels.extend([class_to_id[_class]] * 30)
                         test_labels.extend([class_to_id[_class]] * (len(images_per_class[_class]) - 30))
 
+                    if self.use_val_subset:
+                        n_val_images = ceil(len(train_images) * VAL_SUBSET_FRACTION)
+                        val_images = train_images[-n_val_images:]
+                        train_images = train_images[:-n_val_images]
+                        val_labels = train_labels[-n_val_images:]
+                        train_labels = train_labels[:-n_val_images]
+
                     match self.operation:
                         case "train":
                             self.images.extend(train_images)
                             self.labels.extend(train_labels)
+                        case "val":
+                            if self.use_val_subset:
+                                self.images.extend(val_images)
+                                self.labels.extend(val_labels)
+                            else:
+                                raise ValueError("Caltech-101 has only train and test configs, no validation set available")
                         case "test":
                             self.images.extend(test_images)
                             self.labels.extend(test_labels)
-                        case "val":
-                            raise ValueError("Caltech-101 has only train and test configs")
 
                 case 'imagenet':
+                    if not self.use_val_subset and self.operation == "val":
+                        raise ValueError("ImageNet has only train and test configs, no validation set available")
+
                     validation_gd_path = f"{dataset_path}ILSVRC2012_devkit_t12/data/ILSVRC2012_validation_ground_truth.txt"
                     meta_path = f"{dataset_path}ILSVRC2012_devkit_t12/data/meta.mat"
 
@@ -406,20 +472,36 @@ class custom_dataset(Dataset):
                     classes = sorted(wnid_to_class.values())
                     class_to_id = {cls: idx for idx, cls in enumerate(classes)}
 
+                    train_images = []
+                    train_labels = []
+                    train_wnid = os.listdir(dataset_path + "train/")
+                    for wnid in train_wnid:
+                        _images = glob(dataset_path + "train/" + wnid + "/*.JPEG")
+                        train_images.extend(_images)
+                        class_name = wnid_to_class[wnid]
+                        class_id = class_to_id[class_name]
+                        train_labels.extend([class_id] * len(_images))
+
+                    if self.use_val_subset:
+                        n_val_images = ceil(len(train_images) * VAL_SUBSET_FRACTION)
+                        val_images = train_images[-n_val_images:]
+                        train_images = train_images[:-n_val_images]
+                        val_labels = train_labels[-n_val_images:]
+                        train_labels = train_labels[:-n_val_images]
+
                     match self.operation:
                         case "train":
-                            train_wnid = os.listdir(dataset_path + "train/")
-                            for wnid in train_wnid:
-                                _images = glob(dataset_path + "train/" + wnid + "/*.JPEG")
-                                self.images.extend(_images)
-                                class_name = wnid_to_class[wnid]
-                                class_id = class_to_id[class_name]
-                                self.labels.extend([class_id] * len(_images))
+                            self.images.extend(train_images)
+                            self.labels.extend(train_labels)
+                        
+                        case "val":
+                            if self.use_val_subset:
+                                self.images.extend(val_images)
+                                self.labels.extend(val_labels)
+                            else:
+                                raise ValueError("ImageNet has only train and test configs, no validation set available")
 
                         case "test":
-                            '''
-                            SimCLR uses the validation set for testing
-                            '''
                             val_images = sorted(glob(dataset_path + "val/*.JPEG"))
 
                             idx_to_wnid = {}
@@ -443,17 +525,29 @@ class custom_dataset(Dataset):
                             raise ValueError("ImageNet has only train and test configs")
                     
                 case "tiny-imagenet":
-                    # Using val set as test set
-
                     train_images = glob(f"{dataset_path}train/**/*.JPEG", recursive=True)
                     class_names = sorted(set(img.split("/")[-3] for img in train_images))
                     class_to_idx = {cls_name: idx for idx, cls_name in enumerate(class_names)}
-                    labels = [class_to_idx[img.split("/")[-3]] for img in train_images]
+                    train_labels = [class_to_idx[img.split("/")[-3]] for img in train_images]
+
+                    if self.use_val_subset:
+                        n_val_images = ceil(len(train_images) * VAL_SUBSET_FRACTION)
+                        val_images = train_images[-n_val_images:]
+                        train_images = train_images[:-n_val_images]
+                        val_labels = train_labels[-n_val_images:]
+                        train_labels = train_labels[:-n_val_images]
 
                     match self.operation:
                         case "train":
                             self.images = train_images
-                            self.labels = labels
+                            self.labels = train_labels
+                        
+                        case "val":
+                            if self.use_val_subset:
+                                self.images = val_images
+                                self.labels = val_labels
+                            else:
+                                raise ValueError("Tiny ImageNet has only train and test configs, no validation set available")
 
                         case "test":
                             with open(f"{dataset_path}val/val_annotations.txt", "r") as f:
@@ -511,3 +605,30 @@ class custom_dataset(Dataset):
         image = self.transform(image)
 
         return image, self.labels[idx]
+
+if __name__ == "__main__":
+    import sys
+    if len(sys.argv) != 5:
+        print("Usage: python custom_dataset.py <datasets_folder> <operation> <dataset> <use_val_subset>")
+        sys.exit(1)
+
+    datasets_folder = sys.argv[1]
+    operation = sys.argv[2]
+    dataset = sys.argv[3]
+    use_val_subset = sys.argv[4].lower() == "true"
+
+    dataset = custom_dataset(
+        operation=operation,
+        apply_data_augmentation=True,
+        datasets=[dataset],
+        datasets_folder_path=datasets_folder,
+        transform=v2.Compose([
+            v2.Resize((224, 224)),
+            v2.ToTensor(),
+            v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        ]),
+        label_fraction=None,
+        use_val_subset=use_val_subset
+    )
+
+    print(f"Number of images in {operation} set: {len(dataset)}")
