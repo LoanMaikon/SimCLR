@@ -31,18 +31,24 @@ NUM_CLASSES = {
     'caltech-101': 101,
 }
 
-'''
-<execution_name> is used for linear evaluation and fine tuning to load a determined execution of train_encoder.py
-'''
 class Model():
-    def __init__(self, config_path, gpu_index, operation, execution_name=None, label_fraction=None, lr=None, weight_decay=None, num_epochs=None):
+    def __init__(self,
+                config_path,
+                gpu_index, operation,
+                execution_name=None,
+                label_fraction=None,
+                lr=None,
+                weight_decay=None,
+                num_epochs=None,
+                encoder_config=None,
+                ):
+
         self.operation = operation
         self.execution_name = execution_name if execution_name is not None else None
         self.device = torch.device(f'cuda:{gpu_index}' if torch.cuda.is_available() else 'cpu') if gpu_index is not None else torch.device('cpu')
 
-        if self.device == torch.device('cpu'):
-            torch.set_num_threads(os.cpu_count())
-            torch.set_num_interop_threads(os.cpu_count())
+        torch.set_num_threads(os.cpu_count())
+        torch.set_num_interop_threads(os.cpu_count())
 
         match operation:
             case "train_encoder":
@@ -69,10 +75,10 @@ class Model():
                 self.linear_evaluation_label_fraction = label_fraction
                 self.linear_evaluation_lr = lr
                 self.linear_evaluation_weight_decay = weight_decay
-                assert [label_fraction, num_epochs, lr, weight_decay] is not None, "Label fraction, number of epochs, learning rate and weight decay must be provided for linear evaluation."
+                assert [label_fraction, num_epochs, lr, weight_decay, encoder_config, execution_name] is not None, "Label fraction, number of epochs, learning rate and weight decay must be provided for linear evaluation."
 
                 self._load_linear_evaluation_config(config_path)
-                self._load_train_encoder_config(self.linear_evaluation_encoder_config_path)
+                self._load_train_encoder_config(encoder_config)
 
                 self._create_linear_evaluation_output_path()
 
@@ -96,10 +102,10 @@ class Model():
                 self.transfer_learning_label_fraction = label_fraction
                 self.transfer_learning_lr = lr
                 self.transfer_learning_weight_decay = weight_decay
-                assert [label_fraction, num_epochs, lr, weight_decay] is not None, "Label fraction, number of epochs, learning rate and weight decay must be provided for transfer learning."
+                assert [label_fraction, num_epochs, lr, weight_decay, encoder_config, execution_name] is not None, "Label fraction, number of epochs, learning rate and weight decay must be provided for transfer learning."
 
                 self._load_transfer_learning_config(config_path)
-                self._load_train_encoder_config(self.transfer_learning_encoder_config_path)
+                self._load_train_encoder_config(encoder_config)
 
                 self._create_transfer_learning_output_path()
 
@@ -123,9 +129,6 @@ class Model():
 
     def get_transfer_learning_batch_size(self):
         return self.transfer_learning_batch_size
-    
-    def get_chunk_size(self):
-        return self.train_encoder_chunk_size
 
     def get_linear_evaluation_train_datasets(self):
         return self.linear_evaluation_train_datasets
@@ -197,19 +200,13 @@ class Model():
         self.scheduler = torch.optim.lr_scheduler.LambdaLR(self.optimizer, lr_lambda=__lr_lambda)
 
     def _load_transfer_learning_optimizer(self):
-        self.optimizer = optim.SGD(self.model.parameters(), lr=self.transfer_learning_lr, momentum=0.9, weight_decay=self.transfer_learning_weight_decay, nesterov=True)
+        self.optimizer = optim.AdamW(self.model.parameters(), lr=self.transfer_learning_lr, weight_decay=self.transfer_learning_weight_decay)
 
     def _load_linear_evaluation_optimizer(self):
-        self.optimizer = optim.SGD(self.model.parameters(), lr=self.linear_evaluation_lr, momentum=0.9, weight_decay=self.linear_evaluation_weight_decay, nesterov=True)
+        self.optimizer = optim.AdamW(self.model.parameters(), lr=self.linear_evaluation_lr, weight_decay=self.linear_evaluation_weight_decay)
 
-    '''
-    The SimCLR defines lr = 0.3 * batch_size / 256 and weight decay of 1e-6 (B.6.). We will use 0.003 * batch_size / 256
-    '''
     def _load_train_encoder_optimizer(self):
-        lr = 0.003 * self.train_encoder_batch_size / 256
-        weight_decay = 1e-6
-
-        self.optimizer = optim.AdamW(self.model.parameters(), lr=lr, weight_decay=weight_decay)
+        self.optimizer = optim.AdamW(self.model.parameters(), lr=self.train_encoder_lr, weight_decay=self.train_encoder_weight_decay)
 
         # Still have to make LARS
 
@@ -222,12 +219,12 @@ class Model():
             case "linear_evaluation":
                 models_path = self.linear_evaluation_output_path + "models"
                 os.makedirs(models_path, exist_ok=True)
-                torch.save(self.model.state_dict(), os.path.join(models_path, f"model_{str(int(self.linear_evaluation_label_fraction * 100))}.pth"))
+                torch.save(self.model.state_dict(), os.path.join(models_path, f"model_lf_{str(self.linear_evaluation_label_fraction)}_ne_{str(self.linear_evaluation_num_epochs)}_lr_{str(self.linear_evaluation_lr)}_wd_{str(self.linear_evaluation_weight_decay)}.pth"))
 
             case "transfer_learning":
                 models_path = self.transfer_learning_output_path + "/models"
                 os.makedirs(models_path, exist_ok=True)
-                torch.save(self.model.state_dict(), os.path.join(models_path, f"model_{str(int(self.transfer_learning_label_fraction * 100))}.pth"))
+                torch.save(self.model.state_dict(), os.path.join(models_path, f"model_lf_{str(self.transfer_learning_label_fraction)}_ne_{str(self.transfer_learning_num_epochs)}_lr_{str(self.transfer_learning_lr)}_wd_{str(self.transfer_learning_weight_decay)}.pth"))
 
     def get_train_dataloader(self):
         return self.train_dataloader
@@ -239,37 +236,14 @@ class Model():
         return self.test_dataloader
 
     def model_infer(self, x1, x2=None):
-        result_list = []
-        for i in range(0, x1.size(0), self.train_encoder_chunk_size):
-            chunk = x1[i:i + self.train_encoder_chunk_size].to(self.device)
+        if x2 is None:
+            x1 = self.model(x1.to(self.device))
+            return x1
 
-            result = self.model(chunk)
-            
-            result_list.append(result.cpu())
+        else:
+            x1, x2 = self.model(x1.to(self.device), x2.to(self.device))
 
-            del chunk, result
-            torch.cuda.empty_cache()
-
-        z1 = torch.cat(result_list, dim=0).to(self.device)
-        
-        if x2 is not None:
-            result_list = []
-
-            for i in range(0, x2.size(0), self.train_encoder_chunk_size):
-                chunk = x2[i:i + self.train_encoder_chunk_size].to(self.device)
-
-                result = self.model(chunk)
-                
-                result_list.append(result.cpu())
-                
-                del chunk, result
-                torch.cuda.empty_cache()
-            
-            z2 = torch.cat(result_list, dim=0).to(self.device)
-
-            return z1, z2
-
-        return z1
+            return x1, x2
 
     def get_train_encoder_num_epochs(self):
         return self.train_encoder_num_epochs
@@ -293,10 +267,10 @@ class Model():
         self.train_dataloader = torch.utils.data.DataLoader(
             dataset=train_dataset,
             batch_size=self.transfer_learning_batch_size,
-            num_workers=self.train_encoder_num_workers,
+            num_workers=self.transfer_learning_num_workers,
             shuffle=True,
-            pin_memory=True if self.train_encoder_pin_memory and self.device.type == 'cuda' else False,
-            prefetch_factor=self.train_encoder_prefetch_factor,
+            pin_memory=True if self.transfer_learning_pin_memory and self.device.type == 'cuda' else False,
+            prefetch_factor=self.transfer_learning_prefetch_factor,
         )
 
         self.val_dataloader = None
@@ -312,10 +286,10 @@ class Model():
             self.val_dataloader = torch.utils.data.DataLoader(
                 dataset=val_dataset,
                 batch_size=self.transfer_learning_batch_size,
-                num_workers=self.train_encoder_num_workers,
+                num_workers=self.transfer_learning_num_workers,
                 shuffle=False,
-                pin_memory=True if self.train_encoder_pin_memory and self.device.type == 'cuda' else False,
-                prefetch_factor=self.train_encoder_prefetch_factor,
+                pin_memory=True if self.transfer_learning_pin_memory and self.device.type == 'cuda' else False,
+                prefetch_factor=self.transfer_learning_prefetch_factor,
             )
         
         test_dataset = custom_dataset(
@@ -329,10 +303,10 @@ class Model():
         self.test_dataloader = torch.utils.data.DataLoader(
             dataset=test_dataset,
             batch_size=self.transfer_learning_batch_size,
-            num_workers=self.train_encoder_num_workers,
+            num_workers=self.transfer_learning_num_workers,
             shuffle=False,
-            pin_memory=True if self.train_encoder_pin_memory and self.device.type == 'cuda' else False,
-            prefetch_factor=self.train_encoder_prefetch_factor,
+            pin_memory=True if self.transfer_learning_pin_memory and self.device.type == 'cuda' else False,
+            prefetch_factor=self.transfer_learning_prefetch_factor,
         )
 
     def _load_linear_evaluation_dataloaders(self):
@@ -348,14 +322,14 @@ class Model():
         self.train_dataloader = torch.utils.data.DataLoader(
             dataset=train_dataset,
             batch_size=self.linear_evaluation_batch_size,
-            num_workers=self.train_encoder_num_workers,
+            num_workers=self.linear_evaluation_num_workers,
             shuffle=True,
-            pin_memory=True if self.train_encoder_pin_memory and self.device.type == 'cuda' else False,
-            prefetch_factor=self.train_encoder_prefetch_factor,
+            pin_memory=True if self.linear_evaluation_pin_memory and self.device.type == 'cuda' else False,
+            prefetch_factor=self.linear_evaluation_prefetch_factor,
         )
 
         self.val_dataloader = None
-        if self.has_validation_set(): # Datasets other than ImageNet
+        if self.has_validation_set():
             val_dataset = custom_dataset(
                 operation="val",
                 apply_data_augmentation=False,
@@ -367,10 +341,10 @@ class Model():
             self.val_dataloader = torch.utils.data.DataLoader(
                 dataset=val_dataset,
                 batch_size=self.linear_evaluation_batch_size,
-                num_workers=self.train_encoder_num_workers,
+                num_workers=self.linear_evaluation_num_workers,
                 shuffle=False,
-                pin_memory=True if self.train_encoder_pin_memory and self.device.type == 'cuda' else False,
-                prefetch_factor=self.train_encoder_prefetch_factor,
+                pin_memory=True if self.linear_evaluation_pin_memory and self.device.type == 'cuda' else False,
+                prefetch_factor=self.linear_evaluation_prefetch_factor,
             )
 
         test_dataset = custom_dataset(
@@ -384,10 +358,10 @@ class Model():
         self.test_dataloader = torch.utils.data.DataLoader(
             dataset=test_dataset,
             batch_size=self.linear_evaluation_batch_size,
-            num_workers=self.train_encoder_num_workers,
+            num_workers=self.linear_evaluation_num_workers,
             shuffle=False,
-            pin_memory=True if self.train_encoder_pin_memory and self.device.type == 'cuda' else False,
-            prefetch_factor=self.train_encoder_prefetch_factor,
+            pin_memory=True if self.linear_evaluation_pin_memory and self.device.type == 'cuda' else False,
+            prefetch_factor=self.linear_evaluation_prefetch_factor,
         )
 
     def _load_train_encoder_dataloaders(self):
@@ -407,6 +381,24 @@ class Model():
             pin_memory=True if self.train_encoder_pin_memory and self.device.type == 'cuda' else False,
             prefetch_factor=self.train_encoder_prefetch_factor,
         )
+
+        if self.has_validation_set():
+            val_dataset = custom_dataset(
+                operation="val",
+                apply_data_augmentation=True,
+                datasets=self.train_encoder_train_datasets,
+                datasets_folder_path=self.train_encoder_datasets_path,
+                transform=self.transform,
+            )
+
+            self.val_dataloader = torch.utils.data.DataLoader(
+                dataset=val_dataset,
+                batch_size=self.train_encoder_batch_size,
+                num_workers=self.train_encoder_num_workers,
+                shuffle=False,
+                pin_memory=True if self.train_encoder_pin_memory and self.device.type == 'cuda' else False,
+                prefetch_factor=self.train_encoder_prefetch_factor,
+            )
 
     def _load_train_encoder_transform(self):
         # Pseudo code of Apendix A from SimCLR paper
@@ -459,7 +451,7 @@ class Model():
             v2.Normalize(mean=self.mean, std=self.std)
         ])
 
-    def save_results(self, targets, all_predictions):
+    def save_results(self, targets, all_predictions, json_name):
         def _compute_top_accuracy(all_predictions, targets, top_k=1):
             correct = 0
             total = 0
@@ -494,19 +486,15 @@ class Model():
         output_path = None
         label_fraction = None
         match self.operation:
-            case "linear_evaluation": 
-                output_path = self.linear_evaluation_output_path
-                label_fraction = self.linear_evaluation_label_fraction
-            case "transfer_learning":
-                output_path = self.transfer_learning_output_path
-                label_fraction = self.transfer_learning_label_fraction
+            case "linear_evaluation": output_path = self.linear_evaluation_output_path
+            case "transfer_learning": output_path = self.transfer_learning_output_path
             case _: assert False, f"Operation {self.operation} does not save results."
 
         top_5_accuracy = _compute_top_accuracy(all_predictions, targets, top_k=5)
         top_1_accuracy = _compute_top_accuracy(all_predictions, targets, top_k=1)
         mean_per_class_accuracy = _compute_mean_per_class_accuracy(all_predictions, targets)
 
-        with open(os.path.join(output_path, f"results_{str(label_fraction)}.json"), "w") as f:
+        with open(os.path.join(output_path, json_name), "w") as f:
             json.dump({
                 "top_5_accuracy": top_5_accuracy,
                 "top_1_accuracy": top_1_accuracy,
@@ -543,7 +531,7 @@ class Model():
 
         dataloader = torch.utils.data.DataLoader(
             dataset,
-            batch_size=self.train_encoder_chunk_size, # Using chunk size
+            batch_size=self.train_encoder_batch_size,
             num_workers=self.train_encoder_num_workers,
             pin_memory=True if self.train_encoder_pin_memory and self.device.type == 'cuda' else False,
         )
@@ -586,13 +574,19 @@ class Model():
 
     def _load_backbone(self):
         self.model = None
+        use_checkpoint = None
+        match self.operation:
+            case "train_encoder": use_checkpoint = self.train_encoder_use_checkpoint
+            case "linear_evaluation": use_checkpoint = self.linear_evaluation_use_checkpoint
+            case "transfer_learning": use_checkpoint = self.transfer_learning_use_checkpoint
+        assert use_checkpoint is not None, "Use checkpoint must be defined for the operation."
 
         match self.train_encoder_model_name:
             case 'resnet18':
-                self.model = resnet18(self.train_encoder_projection_head_mode, self.train_encoder_projection_dim, self.train_encoder_use_checkpoint, self.train_encoder_pretrained)
+                self.model = resnet18(self.train_encoder_projection_head_mode, self.train_encoder_projection_dim, use_checkpoint, self.train_encoder_pretrained)
 
             case 'resnet50':
-                self.model = resnet50(self.train_encoder_projection_head_mode, self.train_encoder_projection_dim, self.train_encoder_use_checkpoint, self.train_encoder_pretrained)
+                self.model = resnet50(self.train_encoder_projection_head_mode, self.train_encoder_projection_dim, use_checkpoint, self.train_encoder_pretrained)
             
             case 'mobilenet_v3_large':
                 pass
@@ -628,7 +622,7 @@ class Model():
     def _create_transfer_learning_output_path(self):
         datasets_str = "_".join(self.transfer_learning_train_datasets)
 
-        self.transfer_learning_output_path = self.train_encoder_output_path + f"{self.execution_name}/transfer_learning_{datasets_str}/"
+        self.transfer_learning_output_path = self.train_encoder_output_path + f"{self.execution_name}/transfer_learning_{datasets_str}/lf_{self.transfer_learning_label_fraction}_ne_{self.transfer_learning_num_epochs}_lr_{self.transfer_learning_lr}_wd_{self.transfer_learning_weight_decay}/"
 
         os.makedirs(self.transfer_learning_output_path, exist_ok=True)
         shutil.copyfile(self.transfer_learning_encoder_config_path, os.path.join(self.transfer_learning_output_path, "encoder_config.yaml"))
@@ -637,7 +631,7 @@ class Model():
     def _create_linear_evaluation_output_path(self):
         datasets_str = "_".join(self.linear_evaluation_train_datasets)
 
-        self.linear_evaluation_output_path = self.train_encoder_output_path + f"{self.execution_name}/linear_evaluation_{datasets_str}/"
+        self.linear_evaluation_output_path = self.train_encoder_output_path + f"{self.execution_name}/linear_evaluation_{datasets_str}/lf_{self.linear_evaluation_label_fraction}_ne_{self.linear_evaluation_num_epochs}_lr_{self.linear_evaluation_lr}_wd_{self.linear_evaluation_weight_decay}/"
 
         os.makedirs(self.linear_evaluation_output_path, exist_ok=True)
         shutil.copyfile(self.linear_evaluation_encoder_config_path, os.path.join(self.linear_evaluation_output_path, "encoder_config.yaml"))
@@ -665,6 +659,10 @@ class Model():
         self.transfer_learning_train_datasets = config['train_datasets']
         self.transfer_learning_batch_size = config['batch_size']
         self.transfer_learning_encoder_config_path = config['encoder_config']
+        self.transfer_learning_num_workers = config['num_workers']
+        self.transfer_learning_prefetch_factor = config['prefetch_factor']
+        self.transfer_learning_pin_memory = True if config['pin_memory'] == "True" else False
+        self.transfer_learning_use_checkpoint = True if config['use_checkpoint'] == "True" else False
         self.transfer_learning_config_path = config_path
 
     def _load_linear_evaluation_config(self, config_path):
@@ -673,6 +671,10 @@ class Model():
         self.linear_evaluation_train_datasets = config['train_datasets']
         self.linear_evaluation_batch_size = config['batch_size']
         self.linear_evaluation_encoder_config_path = config['encoder_config']
+        self.linear_evaluation_num_workers = config['num_workers']
+        self.linear_evaluation_prefetch_factor = config['prefetch_factor']
+        self.linear_evaluation_pin_memory = True if config['pin_memory'] == "True" else False
+        self.linear_evaluation_use_checkpoint = True if config['use_checkpoint'] == "True" else False
         self.linear_evaluation_config_path = config_path
 
     def _load_train_encoder_config(self, config_path):
@@ -685,9 +687,10 @@ class Model():
         if self.operation != "train_encoder":
             self.train_encoder_output_path = str(config['output_path'])
         self.train_encoder_datasets_path = str(config['datasets_path'])
-        self.train_encoder_datasets_path = str(config['datasets_path'])
         self.train_encoder_batch_size = int(config['batch_size'])
         self.train_encoder_num_epochs = int(config['num_epochs'])
+        self.train_encoder_lr = float(config['lr'])
+        self.train_encoder_weight_decay = float(config['weight_decay'])
         self.train_encoder_num_workers = int(config['num_workers'])
         self.train_encoder_model_name = str(config['model'])
         self.train_encoder_transform_resize = tuple(config['transform_resize'])
@@ -696,7 +699,6 @@ class Model():
         self.train_encoder_temperature = float(config['temperature'])
         self.train_encoder_projection_dim = int(config['projection_dim'])
         self.train_encoder_warmup_epochs = int(config['warmup_epochs'])
-        self.train_encoder_chunk_size = int(config['chunk_size'])
         self.train_encoder_prefetch_factor = int(config['prefetch_factor'])
         self.train_encoder_pin_memory = True if config['pin_memory'] == "True" else False
         self.train_encoder_use_checkpoint = True if config['use_checkpoint'] == "True" else False

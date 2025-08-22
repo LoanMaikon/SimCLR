@@ -1,7 +1,10 @@
-encoder_config: configs/train_encoder_imagenet.yaml
 train_datasets: [cifar100]
-batch_size: 256
+batch_size: 512
 label_fractions: [1.0]
 num_epochs: [90]
-lr: [0.001]
+lr: [0.2]
 weight_decay: [0.000001]
+num_workers: 40
+prefetch_factor: 2
+pin_memory: False # Set to True if you have enough memory. Larger datasets will not benefit from this
+use_checkpoint: True # Recommended for memory efficiency

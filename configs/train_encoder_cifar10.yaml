@@ -1,6 +1,6 @@
-output_path: /disk0/lmk22/simclr_output/train_encoder_imagenet
+output_path: /disk0/lmk22/simclr_output/train_encoder_cifar10
 datasets_path: /mnt/raid1/lmk22/datasets
-train_datasets: [imagenet]
+train_datasets: [cifar10]
 batch_size: 512 # Paper uses 4096
 num_epochs: 100 # The paper uses 100 epochs
 lr: 0.6

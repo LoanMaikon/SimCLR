@@ -15,7 +15,7 @@ from src.Model import Model
 def main():
     args = get_args()
     
-    model = Model(config_path=args.config, gpu_index=args.gpu, operation="train_encoder", lr=args.lr, weight_decay=args.weight_decay)
+    model = Model(config_path=args.config, gpu_index=args.gpu, operation="train_encoder")
 
     train(model)
 
@@ -44,7 +44,7 @@ def train(model):
         for batch in model.get_train_dataloader():
             model.get_optimizer().zero_grad()
 
-            with torch.amp.autocast('cuda') if model.get_device().type == 'cuda' else torch.autocast('cpu'):
+            with torch.amp.autocast('cuda', dtype=torch.float16) if model.get_device().type == 'cuda' else torch.autocast('cpu'):
                 z1, z2 = model.model_infer(batch[0], batch[1])
                 loss = model.apply_criterion(z1, z2)
 
@@ -54,8 +54,6 @@ def train(model):
             scaler.update()
 
             epoch_train_loss += loss.item()
-
-            torch.cuda.empty_cache()
 
         epoch_train_loss /= len(model.get_train_dataloader())
         train_losses.append(epoch_train_loss)
@@ -68,7 +66,7 @@ def train(model):
             with torch.no_grad():
                 for batch in model.get_validation_dataloader():
 
-                    with torch.amp.autocast('cuda') if model.get_device().type == 'cuda' else torch.autocast('cpu'):
+                    with torch.amp.autocast('cuda', dtype=torch.float16) if model.get_device().type == 'cuda' else torch.autocast('cpu'):
                         z1, z2 = model.model_infer(batch[0], batch[1])
                         loss = model.apply_criterion(z1, z2)
                     val_loss += loss.item()
@@ -92,38 +90,36 @@ def train(model):
 
         model.write_on_log(f"")
 
-    model.plot_fig(
-        x=range(1, model.get_train_encoder_num_epochs() + 1),
-        x_name="Epochs",
-        y=train_losses,
-        y_name="Training Loss",
-        fig_name="train_loss.png"
-    )
-
-    if model.has_validation_set():
         model.plot_fig(
-            x=range(1, model.get_train_encoder_num_epochs() + 1),
+            x=range(1, len(train_losses) + 1),
             x_name="Epochs",
-            y=val_losses,
-            y_name="Validation Loss",
-            fig_name="val_loss.png"
+            y=train_losses,
+            y_name="Training Loss",
+            fig_name="train_loss.png"
         )
 
-    model.plot_fig(
-        x=range(1, model.get_train_encoder_num_epochs() + 1),
-        x_name="Epochs",
-        y=lrs,
-        y_name="Learning Rate",
-        fig_name="lr.png"
-    )
+        if model.has_validation_set():
+            model.plot_fig(
+                x=range(1, len(val_losses) + 1),
+                x_name="Epochs",
+                y=val_losses,
+                y_name="Validation Loss",
+                fig_name="val_loss.png"
+            )
+
+        model.plot_fig(
+            x=range(1, len(lrs) + 1),
+            x_name="Epochs",
+            y=lrs,
+            y_name="Learning Rate",
+            fig_name="lr.png"
+        )
 
 def get_args():
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--config", type=str, help="Path to the config file", required=True)
     parser.add_argument("--gpu", type=int, help="GPU index to use", required=True)
-    parser.add_argument("--lr", type=float, help="Learning rate for the optimizer", required=False)
-    parser.add_argument("--weight_decay", type=float, help="Weight decay for the optimizer", required=False)
 
     return parser.parse_args()
 

@@ -1,6 +1,6 @@
-output_path: /disk0/lmk22/simclr_output/train_encoder_imagenet
+output_path: /disk0/lmk22/simclr_output/train_encoder_tiny_imagenet
 datasets_path: /mnt/raid1/lmk22/datasets
-train_datasets: [imagenet]
+train_datasets: [tiny-imagenet]
 batch_size: 512 # Paper uses 4096
 num_epochs: 100 # The paper uses 100 epochs
 lr: 0.6
@@ -15,4 +15,4 @@ projection_dim: 128 # The paper defines the latent space of size 128
 warmup_epochs: 10 # The paper uses 10 epochs to warm up the learning rate
 pin_memory: False # Set to True if you have enough memory. Larger datasets will not benefit from this
 use_checkpoint: True # Recommended for memory efficiency
-pretrained: False # Set to True if you want to use a pretrained model
+pretrained: True ################################### Set to True if you want to use a pretrained model

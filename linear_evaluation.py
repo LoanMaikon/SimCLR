@@ -12,29 +12,34 @@ import os
 
 from src.Model import Model
 
-LABEL_FRACTIONS = None
-NUM_EPOCHS = None
-
 def main():
     args = get_args()
-    executions_names = get_executions_names(args.config)
-    _set_label_fractions_and_num_epochs(args.config)
+    executions_names = get_executions_names(args.train_dir)
 
     for execution_name in executions_names:
-        for label_fraction, num_epochs in zip(LABEL_FRACTIONS, NUM_EPOCHS):
-            model = Model(config_path=args.config, gpu_index=args.gpu, operation="linear_evaluation", execution_name=execution_name, 
-                          label_fraction=label_fraction, lr=args.lr, weight_decay=args.weight_decay, num_epochs=num_epochs)
+        encoder_config = _get_encoder_config_path_by_execution_name(args.train_dir, execution_name)
 
-            model.write_on_log(f"Label fraction: {label_fraction} Num epochs: {num_epochs}\n")
+        for label_fraction, num_epochs, lr, weight_decay in zip(args.label_fractions, args.num_epochs, args.lrs, args.weight_decays):
+            model = Model(config_path=args.config,
+                          gpu_index=args.gpu,
+                          operation="linear_evaluation",
+                          execution_name=execution_name, 
+                          label_fraction=label_fraction,
+                          lr=lr,
+                          weight_decay=weight_decay,
+                          num_epochs=num_epochs,
+                          encoder_config=encoder_config)
 
-            train(model)
-            test(model)
+            model.write_on_log(f"Label fraction: {label_fraction} Num epochs: {num_epochs} Learning rate: {lr} Weight decay: {weight_decay}\n")
+
+            train(model, label_fraction, num_epochs, lr, weight_decay)
+            test(model, label_fraction, num_epochs, lr, weight_decay)
 
 '''
 Selecting the epoch with the lowest validation loss for datasets where it is available.
 For datasets without validation set, the epoch with the lowest training loss is selected.
 '''
-def train(model):
+def train(model, label_fraction, num_epochs, lr, weight_decay):
     model.write_on_log(f"Starting training...")
 
     scaler = torch.amp.GradScaler()
@@ -56,7 +61,7 @@ def train(model):
         for batch in model.get_train_dataloader():
             model.get_optimizer().zero_grad()
 
-            with torch.amp.autocast('cuda') if model.get_device().type == 'cuda' else torch.autocast('cpu'):
+            with torch.amp.autocast('cuda', dtype=torch.float16) if model.get_device().type == 'cuda' else torch.autocast('cpu'):
                 z1 = model.model_infer(batch[0])
                 targets = batch[1].to(model.get_device())
                 loss = model.apply_criterion(z1, targets)
@@ -66,8 +71,6 @@ def train(model):
             scaler.update()
 
             epoch_train_loss += loss.item()
-
-            torch.cuda.empty_cache()
 
         epoch_train_loss /= len(model.get_train_dataloader())
         train_losses.append(epoch_train_loss)
@@ -79,7 +82,7 @@ def train(model):
             epoch_val_loss = 0.0
             with torch.no_grad():
                 for batch in model.get_val_dataloader():
-                    with torch.amp.autocast('cuda') if model.get_device().type == 'cuda' else torch.autocast('cpu'):
+                    with torch.amp.autocast('cuda', dtype=torch.float16) if model.get_device().type == 'cuda' else torch.autocast('cpu'):
                         z1 = model.model_infer(batch[0])
                         targets = batch[1].to(model.get_device())
                         loss = model.apply_criterion(z1, targets)
@@ -103,24 +106,24 @@ def train(model):
         
         model.write_on_log(f"")
 
-    model.plot_fig(
-        x=range(1, model.get_train_encoder_num_epochs() + 1),
-        x_name="Epochs",
-        y=train_losses,
-        y_name="Training Loss",
-        fig_name="train_loss.png"
-    )
-
-    if model.has_validation_set():
         model.plot_fig(
-            x=range(1, model.get_train_encoder_num_epochs() + 1),
+            x=range(1, len(train_losses) + 1),
             x_name="Epochs",
-            y=val_losses,
-            y_name="Validation Loss",
-            fig_name="val_loss.png"
+            y=train_losses,
+            y_name="Training Loss",
+            fig_name=f"train_loss_lf_{label_fraction}_ne_{num_epochs}_lr_{lr}_wd_{weight_decay}.png"
         )
 
-def test(model):
+        if model.has_validation_set():
+            model.plot_fig(
+                x=range(1, len(val_losses) + 1),
+                x_name="Epochs",
+                y=val_losses,
+                y_name="Validation Loss",
+                fig_name=f"val_loss_lf_{label_fraction}_ne_{num_epochs}_lr_{lr}_wd_{weight_decay}.png"
+            )
+
+def test(model, label_fraction, num_epochs, lr, weight_decay):
     model.write_on_log(f"Starting testing...")
 
     model.model_to_eval()
@@ -130,7 +133,7 @@ def test(model):
 
     with torch.no_grad():
         for batch in model.get_test_dataloader():
-            with torch.amp.autocast('cuda') if model.get_device().type == 'cuda' else torch.autocast('cpu'):
+            with torch.amp.autocast('cuda', dtype=torch.float16) if model.get_device().type == 'cuda' else torch.autocast('cpu'):
                 z1 = model.model_infer(batch[0])
                 targets = batch[1].to(model.get_device())
 
@@ -142,31 +145,22 @@ def test(model):
     model.save_results(
         targets=all_targets,
         all_predictions=all_predictions,
+        json_name=f"results_lb_{label_fraction}_ne_{num_epochs}_lr_{lr}_wd_{weight_decay}.json"
     )
 
     model.write_on_log(f"Testing completed\n")
 
-def _set_label_fractions_and_num_epochs(config):
-    linear_evaluation_config = yaml.safe_load(open(config, 'r'))
+def get_executions_names(train_dir):
+    return sorted(os.listdir(train_dir))
 
-    global LABEL_FRACTIONS, NUM_EPOCHS
-    LABEL_FRACTIONS = linear_evaluation_config['label_fractions']
-    NUM_EPOCHS = linear_evaluation_config['num_epochs']
-
-    assert len(LABEL_FRACTIONS) == len(NUM_EPOCHS), "The number of label fractions must match the number of epochs."
-
-def get_executions_names(config):
-    linear_evaluation_config = yaml.safe_load(open(config, 'r'))
-    train_encoder_config = linear_evaluation_config['encoder_config']
-    train_encoder_config = yaml.safe_load(open(train_encoder_config, 'r'))
-    train_encoder_output_path = train_encoder_config['output_path']
-
-    return sorted(os.listdir(train_encoder_output_path))
+def _get_encoder_config_path_by_execution_name(train_dir, execution_name):
+    return f"{train_dir}/{execution_name}/train_encoder/config.yaml"
 
 def get_args():
     parser = argparse.ArgumentParser(description="Linear Evaluation Training")
+    parser.add_argument("--train_dir", type=str, help="Path to encoder training directory", required=True)
     parser.add_argument("--config", type=str, help="Path to config file", required=True)
-    parser.add_argument("--gpu", type=int, help="GPU index", required=False)
+    parser.add_argument("--gpu", type=int, help="GPU index", required=True)
 
     return parser.parse_args()
 

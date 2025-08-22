@@ -87,35 +87,31 @@ class resnet50(nn.Module):
     def forward(self, x1, x2=None):
         def _forward_chunk(x):
             for name, module in self.backbone._modules.items():
-                if name != 'fc':
-                    x = module(x)
+                if name == 'fc':
+                    break
+
+                x = module(x)
+                
             x = torch.flatten(x, 1)
 
             return x
-        
+
+        if x2 is None:
+            if self.use_checkpoint:
+                feats = torch.utils.checkpoint.checkpoint(_forward_chunk, x1, use_reentrant=False)
+            else:
+                feats = _forward_chunk(x1)
+
+            return self.backbone.fc(feats)
+
+        x = torch.cat([x1, x2], dim=0)
+
         if self.use_checkpoint:
-            x1_out = torch.utils.checkpoint.checkpoint(_forward_chunk, x1, use_reentrant=False)
-
-            torch.cuda.empty_cache()
-            
-            if x2 is not None:
-                x2_out = torch.utils.checkpoint.checkpoint(_forward_chunk, x2, use_reentrant=False)
-
-                torch.cuda.empty_cache()
-                
-                return self.backbone.fc(x1_out), self.backbone.fc(x2_out)
-            
-            return self.backbone.fc(x1_out)
+            feats = torch.utils.checkpoint.checkpoint(_forward_chunk, x, use_reentrant=False)
         else:
-            x1_out = self.backbone(x1)
+            feats = _forward_chunk(x)
 
-            torch.cuda.empty_cache()
+        proj = self.backbone.fc(feats)
+        z1, z2 = proj.chunk(2, dim=0)
 
-            if x2 is not None:
-                x2_out = self.backbone(x2)
-
-                torch.cuda.empty_cache()
-
-                return x1_out, x2_out
-
-            return x1_out
+        return z1, z2
