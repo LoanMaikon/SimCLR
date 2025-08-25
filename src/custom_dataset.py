@@ -531,8 +531,8 @@ class custom_dataset(Dataset):
                 case "tiny-imagenet":
                     train_images = glob(f"{dataset_path}train/**/*.JPEG", recursive=True)
                     class_names = sorted(set(img.split("/")[-3] for img in train_images))
-                    class_to_idx = {cls_name: idx for idx, cls_name in enumerate(class_names)}
-                    train_labels = [class_to_idx[img.split("/")[-3]] for img in train_images]
+                    class_to_id = {cls_name: idx for idx, cls_name in enumerate(class_names)}
+                    train_labels = [class_to_id[img.split("/")[-3]] for img in train_images]
 
                     train_images_per_class = {}
                     for img, label in zip(train_images, train_labels):
@@ -542,26 +542,21 @@ class custom_dataset(Dataset):
 
                     if self.use_val_subset:
                         val_images_per_class = {}
-                        for wnid, _images in train_images_per_class.items():
+                        for class_id, _images in train_images_per_class.items():
                             n_val_images = ceil(len(_images) * VAL_SUBSET_FRACTION)
-
-                            val_images_per_class[wnid] = _images[-n_val_images:]
-                            train_images_per_class[wnid] = _images[:-n_val_images]
+                            val_images_per_class[class_id] = _images[-n_val_images:]
+                            train_images_per_class[class_id] = _images[:-n_val_images]
 
                     match self.operation:
                         case "train":
-                            for wnid, _images in train_images_per_class.items():
+                            for class_id, _images in train_images_per_class.items():
                                 self.images.extend(_images)
-                                class_name = wnid_to_class[wnid]
-                                class_id = class_to_id[class_name]
                                 self.labels.extend([class_id] * len(_images))
 
                         case "val":
                             if self.use_val_subset:
-                                for wnid, _images in val_images_per_class.items():
+                                for class_id, _images in val_images_per_class.items():
                                     self.images.extend(_images)
-                                    class_name = wnid_to_class[wnid]
-                                    class_id = class_to_id[class_name]
                                     self.labels.extend([class_id] * len(_images))
                             else:
                                 raise ValueError("Tiny ImageNet has only train and test configs, no validation set available")
@@ -576,7 +571,7 @@ class custom_dataset(Dataset):
                                 image_name_to_class[l[0]] = l[1]
                             
                             self.images = glob(f"{dataset_path}val/**/*.JPEG", recursive=True)
-                            self.labels = [class_to_idx[image_name_to_class[img.split("/")[-1]]] for img in self.images]
+                            self.labels = [class_to_id[image_name_to_class[img.split("/")[-1]]] for img in self.images]
 
         if self.label_fraction is not None:
             self._apply_label_fraction()
