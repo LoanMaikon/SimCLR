@@ -418,36 +418,39 @@ class custom_dataset(Dataset):
                     for _class in classes:
                         images_per_class[_class] = sorted(glob(images_path + _class + "/*.jpg"))
                     
-                    train_images = []
-                    train_labels = []
-                    test_images = []
-                    test_labels = []
+                    train_images_per_class = {}
+                    test_images_per_class = {}
                     for _class in images_per_class:
-                        train_images.extend(images_per_class[_class][:30])
-                        test_images.extend(images_per_class[_class][30:])
-                        train_labels.extend([class_to_id[_class]] * 30)
-                        test_labels.extend([class_to_id[_class]] * (len(images_per_class[_class]) - 30))
+                        train_images_per_class[class_to_id[_class]] = images_per_class[_class][:30]
+                        test_images_per_class[class_to_id[_class]] = images_per_class[_class][30:]
 
                     if self.use_val_subset:
-                        n_val_images = ceil(len(train_images) * VAL_SUBSET_FRACTION)
-                        val_images = train_images[-n_val_images:]
-                        train_images = train_images[:-n_val_images]
-                        val_labels = train_labels[-n_val_images:]
-                        train_labels = train_labels[:-n_val_images]
+                        for _class in train_images_per_class:
+                            n_val_images = ceil(len(train_images_per_class[_class]) * VAL_SUBSET_FRACTION)
+
+                            val_images = train_images_per_class[_class][-n_val_images:]
+                            train_images = train_images_per_class[_class][:-n_val_images]
+
+                            train_images_per_class[_class] = train_images
+                            val_images_per_class[_class] = val_images
 
                     match self.operation:
                         case "train":
-                            self.images.extend(train_images)
-                            self.labels.extend(train_labels)
+                            for _class in train_images_per_class:
+                                self.images.extend(train_images_per_class[_class])
+                                self.labels.extend([_class] * len(train_images_per_class[_class]))
+
                         case "val":
                             if self.use_val_subset:
-                                self.images.extend(val_images)
-                                self.labels.extend(val_labels)
+                                for _class in val_images_per_class:
+                                    self.images.extend(val_images_per_class[_class])
+                                    self.labels.extend([_class] * len(val_images_per_class[_class]))
                             else:
                                 raise ValueError("Caltech-101 has only train and test configs, no validation set available")
                         case "test":
-                            self.images.extend(test_images)
-                            self.labels.extend(test_labels)
+                            for _class in test_images_per_class:
+                                self.images.extend(test_images_per_class[_class])
+                                self.labels.extend([_class] * len(test_images_per_class[_class]))
 
                 case 'imagenet':
                     if not self.use_val_subset and self.operation == "val":
@@ -472,32 +475,36 @@ class custom_dataset(Dataset):
                     classes = sorted(wnid_to_class.values())
                     class_to_id = {cls: idx for idx, cls in enumerate(classes)}
 
-                    train_images = []
-                    train_labels = []
+                    train_images_per_class = {}
                     train_wnid = os.listdir(dataset_path + "train/")
                     for wnid in train_wnid:
                         _images = glob(dataset_path + "train/" + wnid + "/*.JPEG")
-                        train_images.extend(_images)
-                        class_name = wnid_to_class[wnid]
-                        class_id = class_to_id[class_name]
-                        train_labels.extend([class_id] * len(_images))
+                        train_images_per_class[wnid] = _images
 
                     if self.use_val_subset:
-                        n_val_images = ceil(len(train_images) * VAL_SUBSET_FRACTION)
-                        val_images = train_images[-n_val_images:]
-                        train_images = train_images[:-n_val_images]
-                        val_labels = train_labels[-n_val_images:]
-                        train_labels = train_labels[:-n_val_images]
+                        val_images_per_class = {}
+
+                        for wnid, _images in train_images_per_class.items():
+                            n_val_images = ceil(len(_images) * VAL_SUBSET_FRACTION)
+
+                            val_images_per_class[wnid] = _images[-n_val_images:]
+                            train_images_per_class[wnid] = _images[:-n_val_images]
 
                     match self.operation:
                         case "train":
-                            self.images.extend(train_images)
-                            self.labels.extend(train_labels)
-                        
+                            for wnid, _images in train_images_per_class.items():
+                                self.images.extend(_images)
+                                class_name = wnid_to_class[wnid]
+                                class_id = class_to_id[class_name]
+                                self.labels.extend([class_id] * len(_images))
+
                         case "val":
                             if self.use_val_subset:
-                                self.images.extend(val_images)
-                                self.labels.extend(val_labels)
+                                for wnid, _images in val_images_per_class.items():
+                                    self.images.extend(_images)
+                                    class_name = wnid_to_class[wnid]
+                                    class_id = class_to_id[class_name]
+                                    self.labels.extend([class_id] * len(_images))
                             else:
                                 raise ValueError("ImageNet has only train and test configs, no validation set available")
 
@@ -520,9 +527,6 @@ class custom_dataset(Dataset):
                                 class_name = wnid_to_class[wnid]
                                 class_id = class_to_id[class_name]
                                 self.labels.append(class_id)
-
-                        case "val":
-                            raise ValueError("ImageNet has only train and test configs")
                     
                 case "tiny-imagenet":
                     train_images = glob(f"{dataset_path}train/**/*.JPEG", recursive=True)
@@ -530,22 +534,35 @@ class custom_dataset(Dataset):
                     class_to_idx = {cls_name: idx for idx, cls_name in enumerate(class_names)}
                     train_labels = [class_to_idx[img.split("/")[-3]] for img in train_images]
 
+                    train_images_per_class = {}
+                    for img, label in zip(train_images, train_labels):
+                        if label not in train_images_per_class:
+                            train_images_per_class[label] = []
+                        train_images_per_class[label].append(img)
+
                     if self.use_val_subset:
-                        n_val_images = ceil(len(train_images) * VAL_SUBSET_FRACTION)
-                        val_images = train_images[-n_val_images:]
-                        train_images = train_images[:-n_val_images]
-                        val_labels = train_labels[-n_val_images:]
-                        train_labels = train_labels[:-n_val_images]
+                        val_images_per_class = {}
+                        for wnid, _images in train_images_per_class.items():
+                            n_val_images = ceil(len(_images) * VAL_SUBSET_FRACTION)
+
+                            val_images_per_class[wnid] = _images[-n_val_images:]
+                            train_images_per_class[wnid] = _images[:-n_val_images]
 
                     match self.operation:
                         case "train":
-                            self.images = train_images
-                            self.labels = train_labels
-                        
+                            for wnid, _images in train_images_per_class.items():
+                                self.images.extend(_images)
+                                class_name = wnid_to_class[wnid]
+                                class_id = class_to_id[class_name]
+                                self.labels.extend([class_id] * len(_images))
+
                         case "val":
                             if self.use_val_subset:
-                                self.images = val_images
-                                self.labels = val_labels
+                                for wnid, _images in val_images_per_class.items():
+                                    self.images.extend(_images)
+                                    class_name = wnid_to_class[wnid]
+                                    class_id = class_to_id[class_name]
+                                    self.labels.extend([class_id] * len(_images))
                             else:
                                 raise ValueError("Tiny ImageNet has only train and test configs, no validation set available")
 
