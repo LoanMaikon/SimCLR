@@ -76,7 +76,7 @@ def train(model):
                         z1, z2 = model.model_infer(batch[0], batch[1])
                         loss = model.apply_criterion(z1, z2)
 
-                    predicted, targets = _get_prediction_and_target(z1, z2, model.get_device())
+                    predicted, targets = _get_prediction_and_target(z1, z2)
 
                     val_loss += loss.item() * batch[0].size(0)
                     total_val_samples += batch[0].size(0)
@@ -141,7 +141,8 @@ def train(model):
             fig_name="lr"
         )
 
-def _get_prediction_and_target(z1, z2, device=None):
+# For vision z1, find vision z2 with most similarity
+def _get_prediction_and_target(z1, z2):
     z1_cpu = z1.detach().cpu()
     z2_cpu = z2.detach().cpu()
 

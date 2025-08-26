@@ -37,17 +37,17 @@ class resnet50(nn.Module):
         match self.projection_head_mode:
             case 'linear':
                 self.projection_head = nn.Sequential(
-                    nn.Linear(self.encoder_out_features, self.projection_dim, bias=False),
+                    nn.Linear(self.encoder_out_features, self.projection_dim),
                     nn.BatchNorm1d(self.projection_dim),
                 )
 
 
             case 'non-linear':
                 self.projection_head = nn.Sequential(
-                    nn.Linear(self.encoder_out_features, self.encoder_out_features, bias=False),
+                    nn.Linear(self.encoder_out_features, self.encoder_out_features),
                     nn.BatchNorm1d(self.encoder_out_features),
                     nn.ReLU(),
-                    nn.Linear(self.encoder_out_features, self.projection_dim, bias=False),
+                    nn.Linear(self.encoder_out_features, self.projection_dim),
                     nn.BatchNorm1d(self.projection_dim),
                 )
             
