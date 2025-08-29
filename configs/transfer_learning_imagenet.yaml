@@ -3,7 +3,7 @@ batch_size: 512
 label_fractions: [0.01, 0.1, 1.0]
 num_epochs: [60, 30, 10]
 lr: [0.1, 0.1, 0.1]
-weight_decay: [0.000001, 0.000001, 0.000001]
+weight_decay: [0, 0, 0]
 num_workers: 40
 prefetch_factor: 2
 pin_memory: False # Set to True if you have enough memory. Larger datasets will not benefit from this
