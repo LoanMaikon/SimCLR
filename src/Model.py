@@ -141,7 +141,9 @@ class Model():
         return self.linear_evaluation_num_epochs
 
     def get_learning_rate(self):
-        return float(self.base_optimizer.param_groups[0]['lr'])
+        if self.operation == "train_encoder":
+            return float(self.base_optimizer.param_groups[0]['lr'])
+        return float(self.optimizer.param_groups[0]['lr'])
 
     def get_train_encoder_batch_size(self):
         return self.train_encoder_batch_size
@@ -318,7 +320,7 @@ class Model():
             num_workers=self.transfer_learning_num_workers,
             shuffle=True,
             pin_memory=True if self.transfer_learning_pin_memory and self.device.type == 'cuda' else False,
-            prefetch_factor=self.transfer_learning_prefetch_factor,
+            prefetch_factor=self.transfer_learning_prefetch_factor if self.transfer_learning_num_workers > 0 else None,
         )
 
         self.val_dataloader = None
@@ -338,7 +340,7 @@ class Model():
                 num_workers=self.transfer_learning_num_workers,
                 shuffle=False,
                 pin_memory=True if self.transfer_learning_pin_memory and self.device.type == 'cuda' else False,
-                prefetch_factor=self.transfer_learning_prefetch_factor,
+                prefetch_factor=self.transfer_learning_prefetch_factor if self.transfer_learning_num_workers > 0 else None,
             )
         
         test_dataset = custom_dataset(
@@ -356,7 +358,7 @@ class Model():
             num_workers=self.transfer_learning_num_workers,
             shuffle=False,
             pin_memory=True if self.transfer_learning_pin_memory and self.device.type == 'cuda' else False,
-            prefetch_factor=self.transfer_learning_prefetch_factor,
+            prefetch_factor=self.transfer_learning_prefetch_factor if self.transfer_learning_num_workers > 0 else None,
         )
 
     def _load_linear_evaluation_dataloaders(self):
@@ -376,7 +378,7 @@ class Model():
             num_workers=self.linear_evaluation_num_workers,
             shuffle=True,
             pin_memory=True if self.linear_evaluation_pin_memory and self.device.type == 'cuda' else False,
-            prefetch_factor=self.linear_evaluation_prefetch_factor,
+            prefetch_factor=self.linear_evaluation_prefetch_factor if self.linear_evaluation_num_workers > 0 else None,
         )
 
         self.val_dataloader = None
@@ -396,7 +398,7 @@ class Model():
                 num_workers=self.linear_evaluation_num_workers,
                 shuffle=False,
                 pin_memory=True if self.linear_evaluation_pin_memory and self.device.type == 'cuda' else False,
-                prefetch_factor=self.linear_evaluation_prefetch_factor,
+                prefetch_factor=self.linear_evaluation_prefetch_factor if self.linear_evaluation_num_workers > 0 else None,
             )
 
         test_dataset = custom_dataset(
@@ -414,7 +416,7 @@ class Model():
             num_workers=self.linear_evaluation_num_workers,
             shuffle=False,
             pin_memory=True if self.linear_evaluation_pin_memory and self.device.type == 'cuda' else False,
-            prefetch_factor=self.linear_evaluation_prefetch_factor,
+            prefetch_factor=self.linear_evaluation_prefetch_factor if self.linear_evaluation_num_workers > 0 else None,
         )
 
     def _load_train_encoder_dataloaders(self):
@@ -433,7 +435,7 @@ class Model():
             num_workers=self.train_encoder_num_workers,
             shuffle=True,
             pin_memory=True if self.train_encoder_pin_memory and self.device.type == 'cuda' else False,
-            prefetch_factor=self.train_encoder_prefetch_factor,
+            prefetch_factor=self.train_encoder_prefetch_factor if self.train_encoder_num_workers > 0 else None,
         )
 
         if self.train_encoder_use_val_subset:
@@ -452,7 +454,7 @@ class Model():
                 num_workers=self.train_encoder_num_workers,
                 shuffle=False,
                 pin_memory=True if self.train_encoder_pin_memory and self.device.type == 'cuda' else False,
-                prefetch_factor=self.train_encoder_prefetch_factor,
+                prefetch_factor=self.train_encoder_prefetch_factor if self.train_encoder_num_workers > 0 else None,
             )
 
     def _load_train_encoder_transform(self):
