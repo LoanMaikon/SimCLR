@@ -215,11 +215,12 @@ class Model():
         def __lr_lambda(current_epoch):
             if current_epoch < self.train_encoder_warmup_epochs:
                 return float(current_epoch) / float(max(1, self.train_encoder_warmup_epochs))
-            
+
             progress = (current_epoch - self.train_encoder_warmup_epochs) / (self.train_encoder_num_epochs - self.train_encoder_warmup_epochs)
             return 0.5 * (1. + np.cos(np.pi * progress)) # Cosine decay formula
 
-        self.scheduler = torch.optim.lr_scheduler.LambdaLR(self.optimizer, lr_lambda=__lr_lambda)
+        optimizer_for_scheduler = self.optimizer.optim
+        self.scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer_for_scheduler, lr_lambda=__lr_lambda)
 
     def _load_transfer_learning_optimizer(self):
         self.optimizer = optim.SGD(self.model.parameters(), lr=self.transfer_learning_lr, momentum=0.9, weight_decay=self.transfer_learning_weight_decay, nesterov=True)
