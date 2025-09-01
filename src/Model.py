@@ -16,6 +16,7 @@ from .resnet18 import resnet18
 from .resnet50 import resnet50
 from .custom_dataset import custom_dataset
 from .nt_xent import nt_xent
+from .lars import LARS
 
 NUM_CLASSES = {
     'cifar10': 10,
@@ -227,9 +228,8 @@ class Model():
         self.optimizer = optim.SGD(self.model.parameters(), lr=self.linear_evaluation_lr, momentum=0.9, weight_decay=self.linear_evaluation_weight_decay, nesterov=True)
 
     def _load_train_encoder_optimizer(self):
-        self.optimizer = optim.AdamW(self.model.parameters(), lr=self.train_encoder_lr, weight_decay=self.train_encoder_weight_decay)
-
-        # Still have to make LARS
+        base_optimizer = optim.SGD(self.model.parameters(), lr=self.train_encoder_lr, momentum=0.9, weight_decay=self.train_encoder_weight_decay)
+        self.optimizer = LARS(base_optimizer, trust_coefficient=0.001)
 
     def save_model(self):
         match self.operation:
