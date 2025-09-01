@@ -141,7 +141,7 @@ class Model():
         return self.linear_evaluation_num_epochs
 
     def get_learning_rate(self):
-        return float(self.get_optimizer().param_groups[0]['lr'])
+        return float(self.base_optimizer.param_groups[0]['lr'])
 
     def get_train_encoder_batch_size(self):
         return self.train_encoder_batch_size
@@ -218,9 +218,8 @@ class Model():
 
             progress = (current_epoch - self.train_encoder_warmup_epochs) / (self.train_encoder_num_epochs - self.train_encoder_warmup_epochs)
             return 0.5 * (1. + np.cos(np.pi * progress)) # Cosine decay formula
-
-        optimizer_for_scheduler = self.optimizer.optim
-        self.scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer_for_scheduler, lr_lambda=__lr_lambda)
+        
+        self.scheduler = torch.optim.lr_scheduler.LambdaLR(self.base_optimizer, lr_lambda=__lr_lambda)
 
     def _load_transfer_learning_optimizer(self):
         self.optimizer = optim.SGD(self.model.parameters(), lr=self.transfer_learning_lr, momentum=0.9, weight_decay=self.transfer_learning_weight_decay, nesterov=True)
@@ -229,8 +228,34 @@ class Model():
         self.optimizer = optim.SGD(self.model.parameters(), lr=self.linear_evaluation_lr, momentum=0.9, weight_decay=self.linear_evaluation_weight_decay, nesterov=True)
 
     def _load_train_encoder_optimizer(self):
-        base_optimizer = optim.SGD(self.model.parameters(), lr=self.train_encoder_lr, momentum=0.9, weight_decay=self.train_encoder_weight_decay)
-        self.optimizer = LARS(base_optimizer, trust_coefficient=0.001)
+        def exclude_from_wd_and_adaptation(name):
+            name = name.lower()
+            if 'bn' in name:
+                return True
+            if 'bias' in name:
+                return True
+            return False
+
+        named_params = list(self.model.named_parameters())
+
+        group_1_params = [p for name, p in named_params if (not exclude_from_wd_and_adaptation(name)) and p.requires_grad]
+        group_2_params = [p for name, p in named_params if exclude_from_wd_and_adaptation(name) and p.requires_grad]
+
+        param_groups = [
+            {
+                'params': group_1_params,
+                'weight_decay': self.train_encoder_weight_decay,
+                'layer_adaptation': True,
+            },
+            {
+                'params': group_2_params,
+                'weight_decay': 0.0,
+                'layer_adaptation': False,
+            },
+        ]
+
+        self.base_optimizer = optim.SGD(param_groups, lr=self.train_encoder_lr, momentum=0.9)
+        self.optimizer = LARS(self.base_optimizer, trust_coefficient=0.001)
 
     def save_model(self):
         match self.operation:
