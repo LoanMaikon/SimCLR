@@ -215,6 +215,7 @@ class Model():
 
     def _load_train_encoder_scheduler(self):
         def __lr_lambda(current_epoch):
+            current_epoch += 1
             if current_epoch < self.train_encoder_warmup_epochs:
                 return float(current_epoch) / float(max(1, self.train_encoder_warmup_epochs))
 
