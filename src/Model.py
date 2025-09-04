@@ -14,6 +14,7 @@ import json
 
 from .resnet18 import resnet18
 from .resnet50 import resnet50
+from .pretrained_resnet50 import resnet50x1
 from .custom_dataset import custom_dataset
 from .nt_xent import nt_xent
 from .lars import LARS
@@ -42,11 +43,17 @@ class Model():
                 weight_decay=None,
                 num_epochs=None,
                 encoder_config=None,
+                pretrained_encoder=None,
+                output_dir=None,
+                datasets_folder_path=None,
                 ):
 
         self.operation = operation
         self.execution_name = execution_name if execution_name is not None else None
         self.device = torch.device(f'cuda:{gpu_index}' if torch.cuda.is_available() else 'cpu') if gpu_index is not None else torch.device('cpu')
+        self.pretrained_encoder = pretrained_encoder
+        self.output_dir = output_dir
+        self.datasets_folder_path = datasets_folder_path
 
         # torch.set_num_threads(os.cpu_count())
         # torch.set_num_interop_threads(os.cpu_count())
@@ -76,10 +83,12 @@ class Model():
                 self.linear_evaluation_label_fraction = label_fraction
                 self.linear_evaluation_lr = lr
                 self.linear_evaluation_weight_decay = weight_decay
-                assert [label_fraction, num_epochs, lr, weight_decay, encoder_config, execution_name] is not None, "Label fraction, number of epochs, learning rate and weight decay must be provided for linear evaluation."
+                assert [label_fraction, num_epochs, lr, weight_decay] is not None, "Label fraction, number of epochs, learning rate and weight decay must be provided for linear evaluation."
 
                 self._load_linear_evaluation_config(config_path)
-                self._load_train_encoder_config(encoder_config)
+
+                if self.pretrained_encoder is None and self.output_dir is None and datasets_folder_path is None:
+                    self._load_train_encoder_config(encoder_config)
 
                 self._create_linear_evaluation_output_path(encoder_config)
 
@@ -90,7 +99,11 @@ class Model():
 
                 self.model.to(self.device)
 
-                self._load_normalization() # Load mean and std from JSON
+                if self.pretrained_encoder is None and self.output_dir is None and datasets_folder_path is None:
+                    self._load_normalization() # Load mean and std from JSON
+                elif self.pretrained_encoder is not None and self.output_dir is not None and datasets_folder_path is not None:
+                    self.mean = [0.485, 0.456, 0.406]
+                    self.std = [0.229, 0.224, 0.225]
 
                 self._load_linear_evaluation_transform()
                 self._load_linear_evaluation_dataloaders()
@@ -103,10 +116,12 @@ class Model():
                 self.transfer_learning_label_fraction = label_fraction
                 self.transfer_learning_lr = lr
                 self.transfer_learning_weight_decay = weight_decay
-                assert [label_fraction, num_epochs, lr, weight_decay, encoder_config, execution_name] is not None, "Label fraction, number of epochs, learning rate and weight decay must be provided for transfer learning."
+                assert [label_fraction, num_epochs, lr, weight_decay] is not None, "Label fraction, number of epochs, learning rate and weight decay must be provided for transfer learning."
 
                 self._load_transfer_learning_config(config_path)
-                self._load_train_encoder_config(encoder_config)
+
+                if self.pretrained_encoder is None and self.output_dir is None and datasets_folder_path is None:
+                    self._load_train_encoder_config(encoder_config)
 
                 self._create_transfer_learning_output_path(encoder_config)
 
@@ -117,7 +132,11 @@ class Model():
 
                 self.model.to(self.device)
 
-                self._load_normalization() # Load mean and std from JSON
+                if self.pretrained_encoder is None and self.output_dir is None and datasets_folder_path is None:
+                    self._load_normalization() # Load mean and std from JSON
+                elif self.pretrained_encoder is not None and self.output_dir is not None and datasets_folder_path is not None:
+                    self.mean = [0.485, 0.456, 0.406]
+                    self.std = [0.229, 0.224, 0.225]
 
                 self._load_transfer_learning_transform()
                 self._load_transfer_learning_dataloaders()
@@ -142,7 +161,9 @@ class Model():
 
     def get_learning_rate(self):
         if self.operation == "train_encoder":
-            return float(self.base_optimizer.param_groups[0]['lr'])
+            if self.train_encoder_optimizer == "lars":
+                return float(self.base_optimizer.param_groups[0]['lr'])
+
         return float(self.optimizer.param_groups[0]['lr'])
 
     def get_train_encoder_batch_size(self):
@@ -222,7 +243,10 @@ class Model():
             progress = (current_epoch - self.train_encoder_warmup_epochs) / (self.train_encoder_num_epochs - self.train_encoder_warmup_epochs)
             return 0.5 * (1. + np.cos(np.pi * progress)) # Cosine decay formula
         
-        self.scheduler = torch.optim.lr_scheduler.LambdaLR(self.base_optimizer, lr_lambda=__lr_lambda)
+        if self.train_encoder_optimizer == "adamw":
+            self.scheduler = optim.lr_scheduler.LambdaLR(self.optimizer, lr_lambda=__lr_lambda)
+        elif self.train_encoder_optimizer == "lars":
+            self.scheduler = torch.optim.lr_scheduler.LambdaLR(self.base_optimizer, lr_lambda=__lr_lambda)
 
     def _load_transfer_learning_optimizer(self):
         self.optimizer = optim.SGD(self.model.parameters(), lr=self.transfer_learning_lr, momentum=0.9, weight_decay=self.transfer_learning_weight_decay, nesterov=True)
@@ -238,6 +262,10 @@ class Model():
             if 'bias' in name:
                 return True
             return False
+        
+        if self.train_encoder_optimizer == "adamw":
+            self.optimizer = optim.AdamW(self.model.parameters(), lr=self.train_encoder_lr, weight_decay=self.train_encoder_weight_decay)
+            return
 
         named_params = list(self.model.named_parameters())
 
@@ -309,7 +337,7 @@ class Model():
             operation="train",
             apply_data_augmentation=False,
             datasets=self.transfer_learning_train_datasets,
-            datasets_folder_path=self.train_encoder_datasets_path,
+            datasets_folder_path=self.train_encoder_datasets_path if self.datasets_folder_path is None else self.datasets_folder_path,
             transform=self.transfer_learning_transform_train,
             label_fraction=self.transfer_learning_label_fraction,
             use_val_subset=self.transfer_learning_use_val_subset,
@@ -330,7 +358,7 @@ class Model():
                 operation="val",
                 apply_data_augmentation=False,
                 datasets=self.transfer_learning_train_datasets,
-                datasets_folder_path=self.train_encoder_datasets_path,
+                datasets_folder_path=self.train_encoder_datasets_path if self.datasets_folder_path is None else self.datasets_folder_path,
                 transform=self.transfer_learning_transform_val_test,
                 use_val_subset=self.transfer_learning_use_val_subset,
             )
@@ -348,7 +376,7 @@ class Model():
             operation="test",
             apply_data_augmentation=False,
             datasets=self.transfer_learning_train_datasets,
-            datasets_folder_path=self.train_encoder_datasets_path,
+            datasets_folder_path=self.train_encoder_datasets_path if self.datasets_folder_path is None else self.datasets_folder_path,
             transform=self.transfer_learning_transform_val_test,
             use_val_subset=self.transfer_learning_use_val_subset,
         )
@@ -367,7 +395,7 @@ class Model():
             operation="train",
             apply_data_augmentation=False,
             datasets=self.linear_evaluation_train_datasets,
-            datasets_folder_path=self.train_encoder_datasets_path,
+            datasets_folder_path=self.train_encoder_datasets_path if self.datasets_folder_path is None else self.datasets_folder_path,
             transform=self.linear_evaluation_transform_train,
             label_fraction=self.linear_evaluation_label_fraction,
             use_val_subset=self.linear_evaluation_use_val_subset,
@@ -388,7 +416,7 @@ class Model():
                 operation="val",
                 apply_data_augmentation=False,
                 datasets=self.linear_evaluation_train_datasets,
-                datasets_folder_path=self.train_encoder_datasets_path,
+                datasets_folder_path=self.train_encoder_datasets_path if self.datasets_folder_path is None else self.datasets_folder_path,
                 transform=self.linear_evaluation_transform_val_test,
                 use_val_subset=self.linear_evaluation_use_val_subset,
             )
@@ -406,7 +434,7 @@ class Model():
             operation="test",
             apply_data_augmentation=False,
             datasets=self.linear_evaluation_train_datasets,
-            datasets_folder_path=self.train_encoder_datasets_path,
+            datasets_folder_path=self.train_encoder_datasets_path if self.datasets_folder_path is None else self.datasets_folder_path,
             transform=self.linear_evaluation_transform_val_test,
             use_val_subset=self.linear_evaluation_use_val_subset,
         )
@@ -479,7 +507,7 @@ class Model():
 
     def _load_transfer_learning_transform(self):
         self.transfer_learning_transform_train = v2.Compose([
-            v2.RandomResizedCrop(self.train_encoder_transform_resize), # SimCLR B.5.
+            v2.RandomResizedCrop(self.train_encoder_transform_resize) if self.pretrained_encoder is None and self.output_dir is None else v2.RandomResizedCrop(224), # SimCLR B.5.
             v2.RandomHorizontalFlip(0.5), # SimCLR B.5.
             v2.ToImage(),
             v2.ToDtype(torch.float32, scale=True),
@@ -487,7 +515,8 @@ class Model():
         ])
 
         self.transfer_learning_transform_val_test = v2.Compose([
-            v2.Resize(self.train_encoder_transform_resize),
+            v2.Resize(256),
+            v2.CenterCrop(self.train_encoder_transform_resize) if self.pretrained_encoder is None and self.output_dir is None else v2.CenterCrop(224),
             v2.ToImage(),
             v2.ToDtype(torch.float32, scale=True),
             v2.Normalize(mean=self.mean, std=self.std),
@@ -495,15 +524,16 @@ class Model():
 
     def _load_linear_evaluation_transform(self):
         self.linear_evaluation_transform_train = v2.Compose([
-            v2.RandomResizedCrop(self.train_encoder_transform_resize), # SimCLR B.6.
-            v2.RandomHorizontalFlip(0.5) , # SimCLR B.6.
+            v2.RandomResizedCrop(self.train_encoder_transform_resize) if self.pretrained_encoder is None and self.output_dir is None else v2.RandomResizedCrop(224), # SimCLR B.6.
+            v2.RandomHorizontalFlip(0.5), # SimCLR B.6.
             v2.ToImage(),
             v2.ToDtype(torch.float32, scale=True),
             v2.Normalize(mean=self.mean, std=self.std)
         ])
 
         self.linear_evaluation_transform_val_test = v2.Compose([
-            v2.Resize(self.train_encoder_transform_resize),
+            v2.Resize(256),
+            v2.CenterCrop(self.train_encoder_transform_resize) if self.pretrained_encoder is None and self.output_dir is None else v2.CenterCrop(224),
             v2.ToImage(),
             v2.ToDtype(torch.float32, scale=True),
             v2.Normalize(mean=self.mean, std=self.std)
@@ -617,19 +647,27 @@ class Model():
     def get_device(self):
         return self.device
 
-    def _load_weight(self, model_path):
+    def _load_weight_by_path(self, model_path):
         if not os.path.exists(model_path):
             raise FileNotFoundError(f"Model file {model_path} does not exist.")
 
         self.model.load_state_dict(torch.load(model_path, map_location=self.device))
         self.model.to(self.device)
+    
+    def _load_weight_by_state_dict(self, state_dict):
+        self.model.load_state_dict(state_dict)
+        self.model.to(self.device)
 
     def _load_encoder_weight(self):
-        model_path = f"{self.train_encoder_output_path}{self.execution_name}/train_encoder/models/model.pth"
+        if self.pretrained_encoder is None:
+            model_path = f"{self.train_encoder_output_path}{self.execution_name}/train_encoder/models/model.pth"
 
-        self._fit_projection_head()
-        self._load_weight(model_path)
-        self._remove_projection_head()
+            self._fit_projection_head()
+            self._load_weight_by_path(model_path)
+            self._remove_projection_head()
+        else:
+            sd = torch.load(self.pretrained_encoder, map_location=self.device)
+            self._load_weight_by_state_dict(sd['state_dict'])
 
     def _load_backbone(self):
         self.model = None
@@ -637,8 +675,13 @@ class Model():
         match self.operation:
             case "train_encoder": use_checkpoint = self.train_encoder_use_checkpoint
             case "linear_evaluation": use_checkpoint = self.linear_evaluation_use_checkpoint
-            case "transfer_learning": use_checkpoint = self.transfer_learning_use_checkpoint
+            case "transfer_learning":  use_checkpoint = self.transfer_learning_use_checkpoint
         assert use_checkpoint is not None, "Use checkpoint must be defined for the operation."
+
+        if self.pretrained_encoder is not None and self.output_dir is not None and self.datasets_folder_path is not None:
+            self.model = resnet50x1(use_checkpoint)
+            self.model.to(self.device)
+            return
 
         match self.train_encoder_model_name:
             case 'resnet18':
@@ -678,24 +721,40 @@ class Model():
     def _remove_projection_head(self):
         self.model.remove_projection_head()
 
-    def _create_transfer_learning_output_path(self, encoder_config):
+    def _create_transfer_learning_output_path(self, encoder_config=None):
         datasets_str = "_".join(self.transfer_learning_train_datasets)
 
-        self.transfer_learning_output_path = self.train_encoder_output_path + f"{self.execution_name}/transfer_learning_{datasets_str}/lf_{self.transfer_learning_label_fraction}_ne_{self.transfer_learning_num_epochs}_lr_{self.transfer_learning_lr}_wd_{self.transfer_learning_weight_decay}/"
+        if encoder_config is not None:
+            self.transfer_learning_output_path = self.train_encoder_output_path + f"{self.execution_name}/transfer_learning_{datasets_str}/lf_{self.transfer_learning_label_fraction}_ne_{self.transfer_learning_num_epochs}_lr_{self.transfer_learning_lr}_wd_{self.transfer_learning_weight_decay}/"
 
-        os.makedirs(self.transfer_learning_output_path, exist_ok=True)
-        shutil.copyfile(encoder_config, os.path.join(self.transfer_learning_output_path, "encoder_config.yaml"))
-        shutil.copyfile(self.transfer_learning_config_path, os.path.join(self.transfer_learning_output_path, "config.yaml"))
+            os.makedirs(self.transfer_learning_output_path, exist_ok=True)
+            shutil.copyfile(encoder_config, os.path.join(self.transfer_learning_output_path, "encoder_config.yaml"))
+            shutil.copyfile(self.transfer_learning_config_path, os.path.join(self.transfer_learning_output_path, "config.yaml"))
+        
+        elif self.pretrained_encoder is not None and self.output_dir is not None and self.datasets_folder_path is not None:
+            self.transfer_learning_output_path = self.output_dir + "/" if not self.output_dir.endswith("/") else self.output_dir
+            self.transfer_learning_output_path += f"transfer_learning_{datasets_str}/lf_{self.transfer_learning_label_fraction}_ne_{self.transfer_learning_num_epochs}_lr_{self.transfer_learning_lr}_wd_{self.transfer_learning_weight_decay}/"
 
-    def _create_linear_evaluation_output_path(self, encoder_config):
+            os.makedirs(self.transfer_learning_output_path, exist_ok=True)
+            shutil.copyfile(self.transfer_learning_config_path, os.path.join(self.transfer_learning_output_path, "config.yaml"))
+
+    def _create_linear_evaluation_output_path(self, encoder_config=None):
         datasets_str = "_".join(self.linear_evaluation_train_datasets)
 
-        self.linear_evaluation_output_path = self.train_encoder_output_path + f"{self.execution_name}/linear_evaluation_{datasets_str}/lf_{self.linear_evaluation_label_fraction}_ne_{self.linear_evaluation_num_epochs}_lr_{self.linear_evaluation_lr}_wd_{self.linear_evaluation_weight_decay}"
-        self.linear_evaluation_output_path += "_val_subset/" if self.linear_evaluation_use_val_subset else "/"
+        if encoder_config is not None:
+            self.linear_evaluation_output_path = self.train_encoder_output_path + f"{self.execution_name}/linear_evaluation_{datasets_str}/lf_{self.linear_evaluation_label_fraction}_ne_{self.linear_evaluation_num_epochs}_lr_{self.linear_evaluation_lr}_wd_{self.linear_evaluation_weight_decay}"
+            self.linear_evaluation_output_path += "_val_subset/" if self.linear_evaluation_use_val_subset else "/"
 
-        os.makedirs(self.linear_evaluation_output_path, exist_ok=True)
-        shutil.copyfile(encoder_config, os.path.join(self.linear_evaluation_output_path, "encoder_config.yaml"))
-        shutil.copyfile(self.linear_evaluation_config_path, os.path.join(self.linear_evaluation_output_path, "config.yaml"))
+            os.makedirs(self.linear_evaluation_output_path, exist_ok=True)
+            shutil.copyfile(encoder_config, os.path.join(self.linear_evaluation_output_path, "encoder_config.yaml"))
+            shutil.copyfile(self.linear_evaluation_config_path, os.path.join(self.linear_evaluation_output_path, "config.yaml"))
+        elif self.pretrained_encoder is not None and self.output_dir is not None and self.datasets_folder_path is not None:
+            self.linear_evaluation_output_path = self.output_dir + "/" if not self.output_dir.endswith("/") else self.output_dir
+            self.linear_evaluation_output_path += f"linear_evaluation_{datasets_str}/lf_{self.linear_evaluation_label_fraction}_ne_{self.linear_evaluation_num_epochs}_lr_{self.linear_evaluation_lr}_wd_{self.linear_evaluation_weight_decay}"
+            self.linear_evaluation_output_path += "_val_subset/" if self.linear_evaluation_use_val_subset else "/"
+
+            os.makedirs(self.linear_evaluation_output_path, exist_ok=True)
+            shutil.copyfile(self.linear_evaluation_config_path, os.path.join(self.linear_evaluation_output_path, "config.yaml"))
 
     def _create_train_encoder_output_path(self, config_path):
         config = yaml.safe_load(open(config_path, 'r'))
@@ -764,6 +823,7 @@ class Model():
         self.train_encoder_use_checkpoint = bool(config['use_checkpoint'])
         self.train_encoder_pretrained = bool(config['pretrained'])
         self.train_encoder_use_val_subset = bool(config['use_val_subset'])
+        self.train_encoder_optimizer = str(config['optimizer'])
 
     def plot_fig(self, x, x_name, y, y_name, fig_name):
         plt.figure()

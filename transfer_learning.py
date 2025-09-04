@@ -14,12 +14,21 @@ from src.Model import Model
 
 def main():
     args = get_args()
-    executions_names = get_executions_names(args.train_dir)
+    handle_args(args)
 
     label_fractions_list, num_epochs_list, lr_list, weight_decay_list = get_hyperparameters_from_config(args.config)
 
+    if args.train_dir is not None:
+        executions_names = get_executions_names(args.train_dir)
+    else:
+        executions_names = [None] * len(label_fractions_list)
+
     for execution_name in executions_names:
-        encoder_config = _get_encoder_config_path_by_execution_name(args.train_dir, execution_name)
+
+        if args.train_dir is not None:
+            encoder_config = _get_encoder_config_path_by_execution_name(args.train_dir, execution_name)
+        else:
+            encoder_config = None
 
         for label_fraction, num_epochs, lr, weight_decay in zip(label_fractions_list, num_epochs_list, lr_list, weight_decay_list):
             model = Model(config_path=args.config,
@@ -30,7 +39,11 @@ def main():
                           lr=lr,
                           weight_decay=weight_decay,
                           num_epochs=num_epochs,
-                          encoder_config=encoder_config)
+                          encoder_config=encoder_config,
+                          pretrained_encoder=args.pretrained_encoder,
+                          output_dir=args.output_dir,
+                          datasets_folder_path=args.datasets_folder_path,
+                          )
 
             model.write_on_log(f"Label fraction: {label_fraction} Num epochs: {num_epochs} Learning rate: {lr} Weight decay: {weight_decay}\n")
 
@@ -203,13 +216,34 @@ def get_hyperparameters_from_config(config_path):
     lr = config.get('lr')
     weight_decay = config.get('weight_decay')
 
+    if len({len(label_fractions), len(num_epochs), len(lr), len(weight_decay)}) != 1:
+        raise ValueError("Hyperparameter lists must have the same length.")
+
     return label_fractions, num_epochs, lr, weight_decay
+
+def handle_args(args):
+    if args.train_dir is not None:
+        if args.pretrained_encoder is not None or args.output_dir is not None or args.datasets_folder_path is not None:
+            raise ValueError("If --train_dir is provided, --pretrained_encoder, --output_dir and --datasets_folder_path should not be provided.")
+    else:
+        if args.pretrained_encoder is None or args.output_dir is None or args.datasets_folder_path is None:
+            raise ValueError("If --train_dir is not provided, both --pretrained_encoder, --output_dir and --datasets_folder_path must be provided.")
+        
+    if args.train_dir is not None:
+        args.train_dir += "/" if not args.train_dir.endswith("/") else ""
+    if args.output_dir is not None:
+        args.output_dir += "/" if not args.output_dir.endswith("/") else ""
+    if args.datasets_folder_path is not None:
+        args.datasets_folder_path += "/" if not args.datasets_folder_path.endswith("/") else ""
 
 def get_args():
     parser = argparse.ArgumentParser(description="Linear Evaluation Training")
-    parser.add_argument("--train_dir", type=str, help="Path to encoder training directory", required=True)
     parser.add_argument("--config", type=str, help="Path to config file", required=True)
     parser.add_argument("--gpu", type=int, help="GPU index", required=True)
+    parser.add_argument("--train_dir", type=str, help="Path to encoder training directory", required=False)
+    parser.add_argument("--pretrained_encoder", type=str, help="Path to pretrained encoder", required=False)
+    parser.add_argument("--output_dir", type=str, help="Path to output directory", required=False)
+    parser.add_argument("--datasets_folder_path", type=str, help="Path to datasets folder", required=False)
 
     return parser.parse_args()
 
