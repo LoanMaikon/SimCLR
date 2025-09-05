@@ -15,7 +15,7 @@ This repository contains:
 - `src/`: Source code.
 - `tools/create_datasets.py`: Script to download datasets.
 
-## 2. Steps
+## 2. Train encoder
 
 In `configs/train_encoder_imagenet` there is an example of pretraining of the encoder where
 
@@ -31,7 +31,7 @@ num_workers: num_workers for the dataloader
 prefetch_factor: prefetch_factor for the dataloader
 model: Model to train the encoder. It can be 'resnet18' or 'resnet50'
 transform_resize: [<n>, <n>] where n is the number of pixels to resize the images
-projection_head_mode: Projection head mode
+projection_head_mode: Projection head mode. It can be non-linear, linear or none
 temperature: Temperature
 projection_dim: Dimension of the latent space of the projection head
 warmup_epochs: Warmup epochs
@@ -58,8 +58,107 @@ tiny-imagenet
 caltech-101
 </pre>
 
-To run the encoder pre-training, you can run
+To run the encoder pre-training, you can use
 
 ```
 python3 train_encoder.py --config <path_to_config> --gpu <gpu_index>
+```
+
+A folder like this will be created:
+
+<pre>
+output_path/
+└── execution1/
+    └── train_encoder/
+        ├── config.yaml
+        ├── figs/
+        ├── log.txt
+        ├── models/
+        └── normalization,json
+</pre>
+
+If you run the same input, a new folder `execution2` will be created.
+
+## 3. Linear Evaluation, Fine-tuning and Transfer Learning
+
+A Linear Evaluation, Fine-tuning or Transfer Learning config is shown like:
+
+<pre>
+train_datasets: [<dataset>] where dataset is where the linear_evaluation will happen
+batch_size: Batch size
+label_fractions: [<label_fraction>]. Percentage of data that will be used to train the linear classifier. It can be 1.0 (standard) or lower.
+num_epochs: [<num_epochs>]
+lr: [<learning_rate>]
+weight_decay: [<weight_decay>]
+num_workers: num_workers for the dataloader
+prefetch_factor: prefetch_factor for the dataloader
+pin_memory: pin_memory for the dataloader
+use_checkpoint: True if you want to trade memory efficiency for time eficciency, else False
+pretrained: True if you want to use pre-trained weights on model, else False
+use_val_subset: True if you want to separate some training data for validation. Util if you want to test hyperparameters
+</pre>
+
+Note that `label_fractions`, `num_epochs`, `lr` and `weight_decay` are lists. If you put two elements in this list, the two configurations will be performed sequentialy, creating a folder for each one. All these parameters have to have the same length
+
+To perform Linear Evaluation on the pre-trained encoder, you can run:
+
+```
+python3 linear_evaluation.py --config <path_to_config> --gpu <gpu_index> --train_dir <output_path field from train_encoder config>
+```
+
+Examples of linear_evaluation configs can be found at `configs/linear_evaluation*.yaml`
+
+To perform Fine-tuning or Transfer Learning on the pre-trained encoder, you can run:
+
+```
+python3 transfer_learning.py --config <path_to_config> --gpu <gpu_index> --train_dir <output_path field from train_encoder config>
+```
+
+Note that if you want to perform fine-tuning, the dataset in fine-tuning config must be the same dataset from the encoder pre-training dataset. If you use others, transfer_learning will be performed.
+
+Folders like this will be created:
+
+<pre>
+└── train_encoder_imagenet
+    └── execution_1
+        ├── train_encoder
+        │   ├── config.yaml
+        │   ├── figs/
+        │   ├── log.txt
+        │   ├── models/
+        │   └── normalization.json
+        ├── linear_evaluation_imagenet
+        │   └── lf_<label_fraction>_ne_<num_epochs>_lr_<lr>_wd_<weight_decay>
+        │       ├── config.yaml
+        │       ├── encoder_config.yaml
+        │       ├── figs/
+        │       ├── log.txt
+        │       ├── models/
+        │       └── results_lb_<label_fraction>_ne_<num_epochs>_lr_<lr>_wd_<weight_decay>
+        └── transfer_learning_imagenet
+            └── lf_<label_fraction>_ne_<num_epochs>_lr_<lr>_wd_<weight_decay>
+                ├── config.yaml
+                ├── encoder_config.yaml
+                ├── figs/
+                ├── log.txt
+                ├── models/
+                └── results_lb_<label_fraction>_ne_<num_epochs>_lr_<lr>_wd_<weight_decay>
+</pre>
+
+## 3. Linear Evaluation, Fine-tuning and Transfer Learning with pre-trained weights from SimCLR
+
+You can evaluate the models from SimCLR papers too
+
+You can download the weights from the [SimCLR repository](https://github.com/google-research/simclr). Then, you can transform the weights to pytorch with [this](https://github.com/tonylins/simclr-converter) repository
+
+For Linear Evaluation, you can run:
+
+```
+python3 liner_evaluation.py --config <path_to_config> --gpu <gpu_index> --pretrained_encoder <path_to_model> --output_dir <output_dir> --datasets_folder_path <same as datasets_path from train_encoder config>
+```
+
+For Fine-tuning or Transfer Learning, you can run:
+
+```
+python3 transfer_learning.py --config <path_to_config> --gpu <gpu_index> --pretrained_encoder <path_to_model> --output_dir <output_dir> --datasets_folder_path <same as datasets_path from train_encoder config>
 ```
