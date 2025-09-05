@@ -43,6 +43,7 @@ def main():
                           pretrained_encoder=args.pretrained_encoder,
                           output_dir=args.output_dir,
                           datasets_folder_path=args.datasets_folder_path,
+                          train_dir=args.train_dir,
                           )
 
             model.write_on_log(f"Label fraction: {label_fraction} Num epochs: {num_epochs} Learning rate: {lr} Weight decay: {weight_decay}\n")

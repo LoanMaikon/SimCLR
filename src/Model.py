@@ -46,6 +46,7 @@ class Model():
                 pretrained_encoder=None,
                 output_dir=None,
                 datasets_folder_path=None,
+                train_dir=None
                 ):
 
         self.operation = operation
@@ -54,6 +55,7 @@ class Model():
         self.pretrained_encoder = pretrained_encoder
         self.output_dir = output_dir
         self.datasets_folder_path = datasets_folder_path
+        self.train_dir = train_dir
 
         # torch.set_num_threads(os.cpu_count())
         # torch.set_num_interop_threads(os.cpu_count())
@@ -591,7 +593,7 @@ class Model():
             }, f, indent=4)
 
     def _load_normalization(self):
-        normalization_json_path = f"{self.train_encoder_output_path}{self.execution_name}/train_encoder/normalization.json"
+        normalization_json_path = f"{self.train_dir}{self.execution_name}/train_encoder/normalization.json"
         normalization_json = json.load(open(normalization_json_path, "r"))
 
         self.mean = normalization_json["mean"]
@@ -660,7 +662,7 @@ class Model():
 
     def _load_encoder_weight(self):
         if self.pretrained_encoder is None:
-            model_path = f"{self.train_encoder_output_path}{self.execution_name}/train_encoder/models/model.pth"
+            model_path = f"{self.train_dir}{self.execution_name}/train_encoder/models/model.pth"
 
             self._fit_projection_head()
             self._load_weight_by_path(model_path)
@@ -725,7 +727,7 @@ class Model():
         datasets_str = "_".join(self.transfer_learning_train_datasets)
 
         if encoder_config is not None:
-            self.transfer_learning_output_path = self.train_encoder_output_path + f"{self.execution_name}/transfer_learning_{datasets_str}/lf_{self.transfer_learning_label_fraction}_ne_{self.transfer_learning_num_epochs}_lr_{self.transfer_learning_lr}_wd_{self.transfer_learning_weight_decay}/"
+            self.transfer_learning_output_path = self.train_dir + f"{self.execution_name}/transfer_learning_{datasets_str}/lf_{self.transfer_learning_label_fraction}_ne_{self.transfer_learning_num_epochs}_lr_{self.transfer_learning_lr}_wd_{self.transfer_learning_weight_decay}/"
 
             os.makedirs(self.transfer_learning_output_path, exist_ok=True)
             shutil.copyfile(encoder_config, os.path.join(self.transfer_learning_output_path, "encoder_config.yaml"))
@@ -742,7 +744,7 @@ class Model():
         datasets_str = "_".join(self.linear_evaluation_train_datasets)
 
         if encoder_config is not None:
-            self.linear_evaluation_output_path = self.train_encoder_output_path + f"{self.execution_name}/linear_evaluation_{datasets_str}/lf_{self.linear_evaluation_label_fraction}_ne_{self.linear_evaluation_num_epochs}_lr_{self.linear_evaluation_lr}_wd_{self.linear_evaluation_weight_decay}"
+            self.linear_evaluation_output_path = self.train_dir + f"{self.execution_name}/linear_evaluation_{datasets_str}/lf_{self.linear_evaluation_label_fraction}_ne_{self.linear_evaluation_num_epochs}_lr_{self.linear_evaluation_lr}_wd_{self.linear_evaluation_weight_decay}"
             self.linear_evaluation_output_path += "_val_subset/" if self.linear_evaluation_use_val_subset else "/"
 
             os.makedirs(self.linear_evaluation_output_path, exist_ok=True)
