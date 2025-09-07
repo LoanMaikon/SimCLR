@@ -171,3 +171,7 @@ This repository nearly reproduces SimCLR results. The models can be found [here]
 |---------|--------------|--------|------------|-----------|-----------|-----------|
 | ImageNet | ResNet-50 | 100 | 512 | LARS | 62.41 | 63.80 |
 | ImageNet | ResNet-50 | 100 | 512 | AdamW | 60.08 | 63.80 |
+
+## 5. License
+
+This repositoy is licensed under a [Creative Commons Attribution 4.0 International License](https://creativecommons.org/licenses/by/4.0/).
