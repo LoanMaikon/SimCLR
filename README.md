@@ -162,3 +162,12 @@ For Fine-tuning or Transfer Learning, you can run:
 ```
 python3 transfer_learning.py --config <path_to_config> --gpu <gpu_index> --pretrained_encoder <path_to_model> --output_dir <output_dir> --datasets_folder_path <same as datasets_path from train_encoder config>
 ```
+
+## 4. Results
+
+This repository nearly reproduces SimCLR results. The models can be found [here](https://drive.google.com/drive/folders/1XikVzuvVJq-RFh1TpekWgbp4ya-Z0J1I?usp=sharing)
+
+| Dataset | Architecture | Epochs | Batch Size | Optimizer | Top-1 (%) | Reference |
+|---------|--------------|--------|------------|-----------|-----------|-----------|
+| ImageNet | ResNet-50 | 100 | 512 | LARS | 62.41 | 63.80 |
+| ImageNet | ResNet-50 | 100 | 512 | AdamW | 60.08 | 63.80 |
