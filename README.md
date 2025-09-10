@@ -165,7 +165,7 @@ python3 transfer_learning.py --config <path_to_config> --gpu <gpu_index> --pretr
 
 ## 4. Results
 
-This repository nearly reproduces SimCLR results. The models can be found [here](https://drive.google.com/drive/folders/1XikVzuvVJq-RFh1TpekWgbp4ya-Z0J1I?usp=sharing)
+This repository nearly reproduces SimCLR results. The difference is probably because of the Batch Size and de Learning Rate used for both Linear Evaluation and Transfer Learning assessments. In the original paper, the Linear Evaluation was performed under a Batch Size of 4096 with Learning Rate of 1.6. Here, the Linear Evaluation was performed ander a Batch Size of 512 with Learning Rate of 0.2. The same occurs with the Fine-tuning, but with a learning rate of 0.1 instead of the original 0.8. The models can be found [here](https://drive.google.com/drive/folders/1XikVzuvVJq-RFh1TpekWgbp4ya-Z0J1I?usp=sharing)
 
 | Dataset | Architecture | Epochs | Batch Size | Optimizer | Top-1 (%) | Reference |
 |---------|--------------|--------|------------|-----------|-----------|-----------|
