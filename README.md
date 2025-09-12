@@ -170,7 +170,7 @@ This repository nearly reproduces SimCLR results. The difference is probably bec
 | Dataset | Architecture | Epochs | Batch Size | Optimizer | Top-1 (%) | Reference |
 |---------|--------------|--------|------------|-----------|-----------|-----------|
 | ImageNet | ResNet-50 | 100 | 512 | LARS | 62.41 | 63.80 |
-| ImageNet | ResNet-50 | 100 | 512 | AdamW | 60.08 | 63.80 |
+| ImageNet | ResNet-50 | 100 | 512 | AdamW | 60.08 | - |
 
 ## 5. License
 
