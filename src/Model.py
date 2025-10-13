@@ -501,7 +501,7 @@ class Model():
             v2.RandomResizedCrop(self.train_encoder_transform_resize), # SimCLR uses default scale and ratio
             v2.RandomHorizontalFlip(0.5), # SimCLR uses 50% probability
             __get_color_distortion(),
-            v2.GaussianBlur(kernel_size=23), # SimCLR uses kernel size of 10% of image size and default sigma. We will use 23
+            v2.RandomApply([v2.GaussianBlur(kernel_size=23, sigma=(0.1, 2.0))], p=0.5),, # SimCLR uses kernel size of 10% of image size and default sigma. We will use 23
             v2.ToImage(),
             v2.ToDtype(torch.float32, scale=True),
             v2.Normalize(mean=self.mean, std=self.std)
