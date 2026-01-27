@@ -12,21 +12,22 @@ from sklearn.metrics import roc_curve
 import numpy as np
 import os
 from time import strftime, localtime
+import timm
 
-class resnet18(nn.Module):
+class mobilenet_v4_small(nn.Module):
     def __init__(self, projection_head_mode, projection_dim, use_checkpoint, pretrained):
-        super(resnet18, self).__init__()
+        super(mobilenet_v4_small, self).__init__()
         self.projection_head_mode = projection_head_mode
         self.projection_dim = projection_dim
         self.use_checkpoint = use_checkpoint
 
         if pretrained:
-            self.backbone = models.resnet18(weights=models.ResNet18_Weights.IMAGENET1K_V1)
+            self.backbone = timm.create_model("mobilenetv4_conv_small", pretrained=True)
         else:
-            self.backbone = models.resnet18(weights=None)
+            self.backbone = timm.create_model("mobilenetv4_conv_small", pretrained=False)
 
         self.projection_head = None
-        self.encoder_out_features = self.backbone.fc.in_features
+        self.encoder_out_features = self.backbone.classifier.in_features
 
         self._load_projection_head()
 
@@ -60,58 +61,75 @@ class resnet18(nn.Module):
     def freeze_encoder(self):
         for param in self.backbone.parameters():
             param.requires_grad = False
-        for param in self.backbone.fc.parameters():
+        for param in self.backbone.classifier.parameters():
             param.requires_grad = True
 
     def unfreeze_encoder(self):
         for param in self.backbone.parameters():
             param.requires_grad = True
-        for param in self.backbone.fc.parameters():
+        for param in self.backbone.classifier.parameters():
             param.requires_grad = True
 
     def fit_projection_head(self):
-        self.backbone.fc = self.projection_head
+        self.backbone.classifier = self.projection_head
 
-        for param in self.backbone.fc.parameters():
+        for param in self.backbone.classifier.parameters():
             param.requires_grad = True
     
     def remove_projection_head(self):
-        self.backbone.fc = nn.Identity()
+        self.backbone.classifier = nn.Identity()
 
     def fit_classifier_head(self, num_classes):
-        self.backbone.fc = nn.Linear(self.encoder_out_features, num_classes, bias=True)
+        self.backbone.classifier = nn.Linear(self.encoder_out_features, num_classes, bias=True)
 
-        for param in self.backbone.fc.parameters():
+        for param in self.backbone.classifier.parameters():
             param.requires_grad = True
 
+    def _forward_impl(self, x):
+        x = self.backbone.conv_stem(x)
+        x = self.backbone.bn1(x)
+        x = self.backbone.blocks(x)
+        x = self.backbone.global_pool(x)
+        x = self.backbone.conv_head(x)
+        x = self.backbone.norm_head(x)
+        x = self.backbone.act2(x)
+        x = self.backbone.flatten(x)
+        x = self.backbone.classifier(x)
+
+        return x
+    
+    def _forward_impl_checkpoint(self, x):
+        x = self.backbone.conv_stem(x)
+        x = self.backbone.bn1(x)
+
+        for block in self.backbone.blocks:
+            for _block_layer in block.children():
+                x = torch.utils.checkpoint.checkpoint(_block_layer, x, use_reentrant=False)
+
+        x = self.backbone.global_pool(x)
+        x = self.backbone.conv_head(x)
+        x = self.backbone.norm_head(x)
+        x = self.backbone.act2(x)
+        x = self.backbone.flatten(x)
+        x = self.backbone.classifier(x)
+
+        return x
+
     def forward(self, x1, x2=None):
-        def _forward_chunk(x):
-            for name, module in self.backbone._modules.items():
-                if name == 'fc':
-                    break
-
-                x = module(x)
-                
-            x = torch.flatten(x, 1)
-
-            return x
-
         if x2 is None:
-            if self.use_checkpoint:
-                feats = torch.utils.checkpoint.checkpoint(_forward_chunk, x1, use_reentrant=False)
+            if not self.use_checkpoint:
+                return self._forward_impl(x1)
             else:
-                feats = _forward_chunk(x1)
-
-            return self.backbone.fc(feats)
+                return self._forward_impl_checkpoint(x1)
 
         x = torch.cat([x1, x2], dim=0)
+        feats = None
 
-        if self.use_checkpoint:
-            feats = torch.utils.checkpoint.checkpoint(_forward_chunk, x, use_reentrant=False)
+        if not self.use_checkpoint:
+            feats = self._forward_impl(x)
         else:
-            feats = _forward_chunk(x)
-
-        proj = self.backbone.fc(feats)
-        z1, z2 = proj.chunk(2, dim=0)
+            feats = self._forward_impl_checkpoint(x)
+        
+        z1, z2 = feats.chunk(2, dim=0)
 
         return z1, z2

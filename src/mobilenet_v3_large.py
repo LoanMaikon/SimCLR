@@ -13,20 +13,20 @@ import numpy as np
 import os
 from time import strftime, localtime
 
-class resnet50(nn.Module):
+class mobilenet_v3_large(nn.Module):
     def __init__(self, projection_head_mode, projection_dim, use_checkpoint, pretrained):
-        super(resnet50, self).__init__()
+        super(mobilenet_v3_large, self).__init__()
         self.projection_head_mode = projection_head_mode
         self.projection_dim = projection_dim
         self.use_checkpoint = use_checkpoint
 
         if pretrained:
-            self.backbone = models.resnet50(weights=models.ResNet50_Weights.IMAGENET1K_V2)
+            self.backbone = models.mobilenet_v3_large(weights=models.MobileNet_V3_Large_Weights.IMAGENET1K_V1)
         else:
-            self.backbone = models.resnet50(weights=None)
+            self.backbone = models.mobilenet_v3_large(weights=None)
 
         self.projection_head = None
-        self.encoder_out_features = self.backbone.fc.in_features
+        self.encoder_out_features = self.backbone.classifier[0].in_features
 
         self._load_projection_head()
 
@@ -60,61 +60,44 @@ class resnet50(nn.Module):
     def freeze_encoder(self):
         for param in self.backbone.parameters():
             param.requires_grad = False
-        for param in self.backbone.fc.parameters():
+        for param in self.backbone.classifier.parameters():
             param.requires_grad = True
 
     def unfreeze_encoder(self):
         for param in self.backbone.parameters():
             param.requires_grad = True
-        for param in self.backbone.fc.parameters():
+        for param in self.backbone.classifier.parameters():
             param.requires_grad = True
 
     def fit_projection_head(self):
-        self.backbone.fc = self.projection_head
+        self.backbone.classifier = self.projection_head
 
-        for param in self.backbone.fc.parameters():
+        for param in self.backbone.classifier.parameters():
             param.requires_grad = True
     
     def remove_projection_head(self):
-        self.backbone.fc = nn.Identity()
+        self.backbone.classifier = nn.Identity()
 
     def fit_classifier_head(self, num_classes):
-        self.backbone.fc = nn.Linear(self.encoder_out_features, num_classes, bias=True)
+        self.backbone.classifier = nn.Linear(self.encoder_out_features, num_classes, bias=True)
 
-        for param in self.backbone.fc.parameters():
+        for param in self.backbone.classifier.parameters():
             param.requires_grad = True
 
     def _forward_impl(self, x):
-        x = self.backbone.conv1(x)
-        x = self.backbone.bn1(x)
-        x = self.backbone.relu(x)
-        x = self.backbone.maxpool(x)
-
-        x = self.backbone.layer1(x)
-        x = self.backbone.layer2(x)
-        x = self.backbone.layer3(x)
-        x = self.backbone.layer4(x)
-
+        x = self.backbone.features(x)
         x = self.backbone.avgpool(x)
         x = torch.flatten(x, 1)
-        x = self.backbone.fc(x)
+        x = self.backbone.classifier(x)
 
         return x
     
     def _forward_impl_checkpoint(self, x):
-        x = self.backbone.conv1(x)
-        x = self.backbone.bn1(x)
-        x = self.backbone.relu(x)
-        x = self.backbone.maxpool(x)
-
-        x = torch.utils.checkpoint.checkpoint(self.backbone.layer1, x, use_reentrant=False)
-        x = torch.utils.checkpoint.checkpoint(self.backbone.layer2, x, use_reentrant=False)
-        x = torch.utils.checkpoint.checkpoint(self.backbone.layer3, x, use_reentrant=False)
-        x = torch.utils.checkpoint.checkpoint(self.backbone.layer4, x, use_reentrant=False)
-
+        for layer in self.backbone.features:
+            x = torch.utils.checkpoint.checkpoint(layer, x, use_reentrant=False)
         x = self.backbone.avgpool(x)
         x = torch.flatten(x, 1)
-        x = self.backbone.fc(x)
+        x = self.backbone.classifier(x)
 
         return x
 

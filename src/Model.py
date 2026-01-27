@@ -12,12 +12,14 @@ import os
 from time import strftime, localtime
 import json
 
-from .resnet18 import resnet18
 from .resnet50 import resnet50
 from .pretrained_resnet50 import resnet50x1
 from .custom_dataset import custom_dataset
 from .nt_xent import nt_xent
 from .lars import LARS
+from .mobilenet_v3_large import mobilenet_v3_large
+from .mobilenet_v3_small import mobilenet_v3_small
+from .mobilenet_v4_small import mobilenet_v4_small
 
 NUM_CLASSES = {
     'cifar10': 10,
@@ -70,7 +72,9 @@ class Model():
 
                 self.model.to(self.device)
 
-                self._compute_normalization() # Calculating mean and std
+                # self._compute_normalization() # Calculating mean and std, uncomment to compute on your dataset
+                self.mean = [0.485, 0.456, 0.406]
+                self.std = [0.229, 0.224, 0.225]
                 self._save_normalization() # Save on JSON
 
                 self._load_train_encoder_transform()
@@ -501,10 +505,10 @@ class Model():
             v2.RandomResizedCrop(self.train_encoder_transform_resize), # SimCLR uses default scale and ratio
             v2.RandomHorizontalFlip(0.5), # SimCLR uses 50% probability
             __get_color_distortion(),
-            v2.RandomApply([v2.GaussianBlur(kernel_size=23, sigma=(0.1, 2.0))], p=0.5),, # SimCLR uses kernel size of 10% of image size and default sigma. We will use 23
+            v2.RandomApply([v2.GaussianBlur(kernel_size=23, sigma=(0.1, 2.0))], p=0.5), # SimCLR uses kernel size of 10% of image size and default sigma. We will use 23
             v2.ToImage(),
             v2.ToDtype(torch.float32, scale=True),
-            v2.Normalize(mean=self.mean, std=self.std)
+            v2.Normalize(mean=self.mean, std=self.std),
         ])
 
     def _load_transfer_learning_transform(self):
@@ -686,17 +690,20 @@ class Model():
             return
 
         match self.train_encoder_model_name:
-            case 'resnet18':
-                self.model = resnet18(self.train_encoder_projection_head_mode, self.train_encoder_projection_dim, use_checkpoint, self.train_encoder_pretrained)
-
             case 'resnet50':
                 self.model = resnet50(self.train_encoder_projection_head_mode, self.train_encoder_projection_dim, use_checkpoint, self.train_encoder_pretrained)
             
             case 'mobilenet_v3_large':
-                pass
+                self.model = mobilenet_v3_large(self.train_encoder_projection_head_mode, self.train_encoder_projection_dim, use_checkpoint, self.train_encoder_pretrained)
+            
+            case 'mobilenet_v3_small':
+                self.model = mobilenet_v3_small(self.train_encoder_projection_head_mode, self.train_encoder_projection_dim, use_checkpoint, self.train_encoder_pretrained)
             
             case 'mobilevit':
                 pass
+
+            case 'mobilenet_v4_small':
+                self.model = mobilenet_v4_small(self.train_encoder_projection_head_mode, self.train_encoder_projection_dim, use_checkpoint, self.train_encoder_pretrained)
         
         assert self.model is not None, f"Model {self.train_encoder_model_name} doesn't exist."
 
