@@ -466,7 +466,7 @@ class Model():
 
         self.train_dataloader = torch.utils.data.DataLoader(
             dataset=train_dataset,
-            batch_size=self.train_encoder_batch_size,
+            batch_size=self.train_encoder_worker_batch_size,
             num_workers=self.train_encoder_num_workers,
             shuffle=True,
             pin_memory=True if self.train_encoder_pin_memory and self.device.type == 'cuda' else False,
@@ -833,6 +833,8 @@ class Model():
         self.train_encoder_pretrained = bool(config['pretrained'])
         self.train_encoder_use_val_subset = bool(config['use_val_subset'])
         self.train_encoder_optimizer = str(config['optimizer'])
+
+        self.train_encoder_worker_batch_size = int(config['worker_batch_size'])
 
     def plot_fig(self, x, x_name, y, y_name, fig_name):
         plt.figure()
