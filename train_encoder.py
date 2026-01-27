@@ -48,6 +48,15 @@ def train(model):
 
         for batch in model.get_train_dataloader():
             real_samples += model.train_encoder_worker_batch_size
+
+            if batches is None:
+                batches = batch
+            else:
+                batches = (
+                    torch.cat([batches[0], batch[0]], dim=0),
+                    torch.cat([batches[1], batch[1]], dim=0),
+                )
+
             if real_samples >= model.train_encoder_batch_size:
                 model.get_optimizer().zero_grad()
 
@@ -66,14 +75,7 @@ def train(model):
                 real_samples = 0
                 batches = None
             else:
-                if batches is None:
-                    batches = batch
-                else:
-                    batches = (
-                        torch.cat([batches[0], batch[0]], dim=0),
-                        torch.cat([batches[1], batch[1]], dim=0),
-                    )
-                
+                continue
 
         epoch_train_loss /= epoch_train_samples
         train_losses.append(epoch_train_loss)
