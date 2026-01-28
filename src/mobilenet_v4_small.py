@@ -122,14 +122,11 @@ class mobilenet_v4_small(nn.Module):
             else:
                 return self._forward_impl_checkpoint(x1)
 
-        x = torch.cat([x1, x2], dim=0)
-        feats = None
-
         if not self.use_checkpoint:
-            feats = self._forward_impl(x)
+            feats1 = self._forward_impl(x1)
+            feats2 = self._forward_impl(x2)
         else:
-            feats = self._forward_impl_checkpoint(x)
+            feats1 = self._forward_impl_checkpoint(x1)
+            feats2 = self._forward_impl_checkpoint(x2)
         
-        z1, z2 = feats.chunk(2, dim=0)
-
-        return z1, z2
+        return feats1, feats2

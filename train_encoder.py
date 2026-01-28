@@ -43,25 +43,25 @@ def train(model):
         epoch_train_loss = 0.0
         epoch_train_samples = 0
 
-        real_samples = 0
-        batches = None
+        current_batch = 0
+
+        accumulated_x1 = []
+        accumulated_x2 = []
 
         for batch in model.get_train_dataloader():
-            real_samples += model.train_encoder_worker_batch_size
+            current_batch += 1
 
-            if batches is None:
-                batches = batch
-            else:
-                batches = (
-                    torch.cat([batches[0], batch[0]], dim=0),
-                    torch.cat([batches[1], batch[1]], dim=0),
-                )
+            accumulated_x1.append(batch[0])
+            accumulated_x2.append(batch[1])
 
-            if real_samples >= model.train_encoder_batch_size:
+            if current_batch >= (model.train_encoder_batch_size // model.train_encoder_worker_batch_size):
+                x1 = torch.cat(accumulated_x1, dim=0)
+                x2 = torch.cat(accumulated_x2, dim=0)
+
                 model.get_optimizer().zero_grad()
 
                 with torch.amp.autocast('cuda', dtype=torch.float16):
-                    z1, z2 = model.model_infer(batches[0], batches[1])
+                    z1, z2 = model.model_infer(x1, x2)
                     loss = model.apply_criterion(z1, z2)
 
                 scaler.scale(loss).backward()
@@ -69,11 +69,12 @@ def train(model):
 
                 scaler.update()
 
-                epoch_train_loss += loss.item() * batches[0].size(0)
-                epoch_train_samples += batches[0].size(0)
+                epoch_train_loss += loss.item() * x1[0].size(0)
+                epoch_train_samples += x1[0].size(0)
 
-                real_samples = 0
-                batches = None
+                current_batch = 0
+                accumulated_x1 = []
+                accumulated_x2 = []
             else:
                 continue
 
