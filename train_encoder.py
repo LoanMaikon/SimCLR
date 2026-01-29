@@ -34,9 +34,9 @@ def train(model):
 
     best_train_loss = float('inf')
     best_val_loss = float('inf')
-    for epoch in range(model.get_train_encoder_num_epochs()):
+    for epoch in range(1, model.get_train_encoder_num_epochs() + 1):
         lrs.append(model.get_learning_rate())
-        model.write_on_log(f"Epoch {epoch + 1}/{model.get_train_encoder_num_epochs()}")
+        model.write_on_log(f"Epoch {epoch}/{model.get_train_encoder_num_epochs()}")
 
         model.model_to_train()
         
@@ -69,8 +69,8 @@ def train(model):
 
                 scaler.update()
 
-                epoch_train_loss += loss.item() * x1[0].size(0)
-                epoch_train_samples += x1[0].size(0)
+                epoch_train_loss += loss.item() * x1.size(0) * 2
+                epoch_train_samples += x1.size(0) * 2
 
                 current_batch = 0
                 accumulated_x1 = []
@@ -82,47 +82,13 @@ def train(model):
         train_losses.append(epoch_train_loss)
         model.write_on_log(f"Training loss: {epoch_train_loss:.4f}")
 
-        if model.get_use_val_subset():
-            model.model_to_eval()
-
-            val_loss = 0.0
-            total_val_samples = 0
-            total_val_preds = 0
-            correct_val_samples = 0
-
-            with torch.no_grad():
-                for batch in model.get_val_dataloader():
-                    with torch.amp.autocast('cuda', dtype=torch.float16):
-                        z1, z2 = model.model_infer(batch[0], batch[1])
-                        loss = model.apply_criterion(z1, z2)
-
-                    predicted, targets = _get_prediction_and_target(z1, z2)
-
-                    val_loss += loss.item() * batch[0].size(0)
-                    total_val_samples += batch[0].size(0)
-
-                    correct_val_samples += (predicted == targets).sum().item()
-                    total_val_preds += predicted.size(0)
-
-            val_loss /= total_val_samples
-            val_acc = correct_val_samples / total_val_preds
-
-            val_losses.append(val_loss)
-            val_accs.append(val_acc)
-
-            model.write_on_log(f"Validation loss: {val_loss:.4f}")
-            model.write_on_log(f"Validation accuracy: {val_acc:.4f}")
-
-            if val_loss < best_val_loss:
-                model.write_on_log(f"Validation loss improved from {best_val_loss:.4f} to {val_loss:.4f}. Saving model...")
-                best_val_loss = val_loss
-                model.save_model()
-
-        else:
-            if epoch_train_loss < best_train_loss:
-                model.write_on_log(f"Training loss improved from {best_train_loss:.4f} to {epoch_train_loss:.4f}. Saving model...")
-                best_train_loss = epoch_train_loss
-                model.save_model()
+        if epoch_train_loss < best_train_loss:
+            model.write_on_log(f"Training loss improved from {best_train_loss:.4f} to {epoch_train_loss:.4f}. Saving model...")
+            best_train_loss = epoch_train_loss
+            model.save_model()
+        
+        if epoch % model.train_encoder_save_every == 0 or epoch == model.get_train_encoder_num_epochs():
+            model.save_model(f"model_{epoch}.pth")
         
         model.get_scheduler().step()
 

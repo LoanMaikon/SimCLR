@@ -2,7 +2,7 @@ output_path: ../results_mobilenetv3_small_imagenet
 datasets_path: /mnt/raid1/lmk22/datasets
 train_datasets: [imagenet]
 batch_size: 4096
-worker_batch_size: 64
+worker_batch_size: 512
 num_epochs: 1000
 lr: 4.8
 weight_decay: 0.000001
@@ -19,3 +19,4 @@ use_checkpoint: True
 pretrained: False
 use_val_subset: False
 optimizer: lars
+save_every: 50

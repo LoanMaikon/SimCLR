@@ -294,11 +294,14 @@ class Model():
         self.base_optimizer = optim.SGD(param_groups, lr=self.train_encoder_lr, momentum=0.9)
         self.optimizer = LARS(self.base_optimizer, trust_coefficient=0.001)
 
-    def save_model(self):
+    def save_model(self, name=None):
         match self.operation:
             case "train_encoder":
                 os.makedirs(self.train_encoder_output_path + "/models", exist_ok=True)
-                torch.save(self.model.state_dict(), os.path.join(self.train_encoder_output_path, "models", "model.pth"))
+                if name is None:
+                    torch.save(self.model.state_dict(), os.path.join(self.train_encoder_output_path, "models", "model.pth"))
+                else:
+                    torch.save(self.model.state_dict(), os.path.join(self.train_encoder_output_path, "models", name))
 
             case "linear_evaluation":
                 models_path = self.linear_evaluation_output_path + "models"
@@ -835,6 +838,7 @@ class Model():
         self.train_encoder_optimizer = str(config['optimizer'])
 
         self.train_encoder_worker_batch_size = int(config['worker_batch_size'])
+        self.train_encoder_save_every = int(config['save_every'])
 
     def plot_fig(self, x, x_name, y, y_name, fig_name):
         plt.figure()
