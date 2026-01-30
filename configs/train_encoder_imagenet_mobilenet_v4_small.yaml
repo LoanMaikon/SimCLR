@@ -1,13 +1,13 @@
-output_path: ../results_mobilenetv3_small_imagenet
+output_path: ../results_mobilenetv4_small_imagenet
 datasets_path: /mnt/raid1/lmk22/datasets
 train_datasets: [imagenet]
 batch_size: 4096
-worker_batch_size: 512
+worker_batch_size: 256
 num_epochs: 1000
 lr: 4.8
 weight_decay: 0.000001
 num_workers: 128
-prefetch_factor: 6
+prefetch_factor: 1
 model: mobilenet_v4_small
 transform_resize: [224, 224]
 projection_head_mode: non-linear
