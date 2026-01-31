@@ -48,13 +48,14 @@ def train(model):
         accumulated_x1 = []
         accumulated_x2 = []
 
-        for batch in model.get_train_dataloader():
+        len_train_dataloader = len(model.get_train_dataloader())
+        for idx, batch in enumerate(model.get_train_dataloader()):
             current_batch += 1
 
             accumulated_x1.append(batch[0])
             accumulated_x2.append(batch[1])
 
-            if current_batch >= (model.train_encoder_batch_size // model.train_encoder_worker_batch_size):
+            if (current_batch >= model.train_encoder_batch_size // model.train_encoder_worker_batch_size) or (idx >= len_train_dataloader - 1):
                 x1 = torch.cat(accumulated_x1, dim=0)
                 x2 = torch.cat(accumulated_x2, dim=0)
 
@@ -126,30 +127,6 @@ def train(model):
             y_name="Learning Rate",
             fig_name="lr"
         )
-
-# For vision z1, find vision z2 with most similarity
-def _get_prediction_and_target(z1, z2):
-    z1_cpu = z1.detach().cpu()
-    z2_cpu = z2.detach().cpu()
-
-    z1_cpu = torch.nn.functional.normalize(z1_cpu, dim=1)
-    z2_cpu = torch.nn.functional.normalize(z2_cpu, dim=1)
-
-    batch_size = z1_cpu.size(0)
-
-    sim = torch.matmul(z1_cpu, z2_cpu.T)
-
-    # For each z1, find the most similar z2 and vice-versa
-    pred_1_to_2 = sim.argmax(dim=1)
-    pred_2_to_1 = sim.T.argmax(dim=1)
-
-    targets = torch.arange(batch_size, dtype=torch.long)
-
-    predicted = torch.cat([pred_1_to_2, pred_2_to_1], dim=0)
-    targets = torch.cat([targets, targets], dim=0)
-
-    return predicted, targets
-
 
 def get_args():
     parser = argparse.ArgumentParser()
