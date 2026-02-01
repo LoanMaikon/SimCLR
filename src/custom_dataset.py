@@ -617,30 +617,3 @@ class custom_dataset(Dataset):
         image = self.transform(image)
 
         return image, self.labels[idx]
-
-if __name__ == "__main__":
-    import sys
-    if len(sys.argv) != 5:
-        print("Usage: python custom_dataset.py <datasets_folder> <operation> <dataset> <use_val_subset>")
-        sys.exit(1)
-
-    datasets_folder = sys.argv[1]
-    operation = sys.argv[2]
-    dataset = sys.argv[3]
-    use_val_subset = sys.argv[4].lower() == "true"
-
-    dataset = custom_dataset(
-        operation=operation,
-        apply_data_augmentation=True,
-        datasets=[dataset],
-        datasets_folder_path=datasets_folder,
-        transform=v2.Compose([
-            v2.Resize((224, 224)),
-            v2.ToTensor(),
-            v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-        ]),
-        label_fraction=None,
-        use_val_subset=use_val_subset
-    )
-
-    print(f"Number of images in {operation} set: {len(dataset)}")

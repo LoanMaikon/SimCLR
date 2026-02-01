@@ -64,14 +64,14 @@ def train(model):
                 with torch.amp.autocast('cuda', dtype=torch.float16):
                     z1, z2 = model.model_infer(x1, x2)
                     loss = model.apply_criterion(z1, z2)
+                
+                epoch_train_loss += loss.item() * x1.size(0)
+                epoch_train_samples += x1.size(0)
 
                 scaler.scale(loss).backward()
                 scaler.step(model.get_optimizer())
 
                 scaler.update()
-
-                epoch_train_loss += loss.item() * x1.size(0) * 2
-                epoch_train_samples += x1.size(0) * 2
 
                 current_batch = 0
                 accumulated_x1 = []
