@@ -712,6 +712,9 @@ class Model():
 
         self.model.to(self.device)
     
+    def load_model(self, model_path):
+        self._load_weight_by_path(model_path)
+    
     def _freeze_encoder(self):
         self.model.freeze_encoder()
 
