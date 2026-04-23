@@ -1,14 +1,14 @@
-output_path: ../nanopark_base_imagenet
+output_path: ../nanopark_small_imagenet
 datasets_path: ../datasets
 train_datasets: [imagenet]
-batch_size: 4096 # Paper uses 4096
+batch_size: 1024 # Paper uses 4096
 num_epochs: 1000 # The paper uses 100 epochs
-lr: 4.8
+lr: 1.2
 weight_decay: 0.000001
 num_workers: 64
 prefetch_factor: 1
-model: nanopark_base
-transform_resize: [224, 224]
+model: nanopark_small
+transform_resize: [32, 32]
 projection_head_mode: non-linear # linear, non-linear or none
 temperature: 0.1 # The paper tells us that the optimal and stable temperature is 0.5
 projection_dim: 128 # The paper defines the latent space of size 128
