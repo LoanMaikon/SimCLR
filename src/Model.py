@@ -326,7 +326,7 @@ class Model():
             return x1
 
         else:
-            x1, x2 = self.model(x1.to(self.device), x2.to(self.device))
+            x1, x2 = self.model(x1.to(self.device)), self.model(x2.to(self.device))
 
             return x1, x2
 
