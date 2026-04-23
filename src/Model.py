@@ -20,6 +20,7 @@ from .lars import LARS
 from .mobilenet_v3_large import mobilenet_v3_large
 from .mobilenet_v3_small import mobilenet_v3_small
 from .mobilenet_v4_small import mobilenet_v4_small
+from .NanoPark import nanopark_base, nanopark_large, nanopark_small, nanopark_tiny
 
 NUM_CLASSES = {
     'cifar10': 10,
@@ -701,6 +702,18 @@ class Model():
             
             case 'mobilevit':
                 pass
+
+            case 'nanopark_base':
+                self.model = nanopark_base()
+
+            case 'nanopark_large':
+                self.model = nanopark_large()
+
+            case 'nanopark_small':
+                self.model = nanopark_small()
+            
+            case 'nanopark_tiny':
+                self.model = nanopark_tiny()
 
             case 'mobilenet_v4_small':
                 self.model = mobilenet_v4_small(self.train_encoder_projection_head_mode, self.train_encoder_projection_dim, use_checkpoint, self.train_encoder_pretrained)
