@@ -117,6 +117,9 @@ class NanoPark(nn.Module):
 
         self.fc = nn.Identity() # Placeholder for potential future fully connected layer
 
+        self.encoder_out_features = int(64*width_multiplier)
+        self.projection_dim = 128
+
         self._load_projection_head()
 
     def forward(self, x):
@@ -191,28 +194,13 @@ class NanoPark(nn.Module):
     Following https://github.com/google-research/simclr/blob/master/model_util.py
     '''
     def _load_projection_head(self):
-        match self.projection_head_mode:
-            case 'linear':
-                self.projection_head = nn.Sequential(
-                    nn.Linear(self.encoder_out_features, self.projection_dim),
-                    nn.BatchNorm1d(self.projection_dim),
-                )
-
-
-            case 'non-linear':
-                self.projection_head = nn.Sequential(
-                    nn.Linear(self.encoder_out_features, self.encoder_out_features),
-                    nn.BatchNorm1d(self.encoder_out_features),
-                    nn.ReLU(),
-                    nn.Linear(self.encoder_out_features, self.projection_dim),
-                    nn.BatchNorm1d(self.projection_dim),
-                )
-            
-            case 'none':
-                self.projection_head = nn.Identity()
-        
-        if self.projection_head is None:
-            raise ValueError("Projection head mode must be 'linear', 'non-linear', or 'none'.")
+        self.projection_head = nn.Sequential(
+            nn.Linear(self.encoder_out_features, self.encoder_out_features),
+            nn.BatchNorm1d(self.encoder_out_features),
+            nn.ReLU(),
+            nn.Linear(self.encoder_out_features, self.projection_dim),
+            nn.BatchNorm1d(self.projection_dim),
+        )
 
 def nanopark_large(in_channels=3):
     return NanoPark(in_channels=in_channels, width_multiplier=1.5)

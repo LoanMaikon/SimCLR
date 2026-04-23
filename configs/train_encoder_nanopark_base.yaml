@@ -5,7 +5,7 @@ batch_size: 4096 # Paper uses 4096
 num_epochs: 1000 # The paper uses 100 epochs
 lr: 4.8
 weight_decay: 0.000001
-num_workers: 20
+num_workers: 64
 prefetch_factor: 2
 model: nanopark_base
 transform_resize: [224, 224]
